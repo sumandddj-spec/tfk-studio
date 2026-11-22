@@ -8,7 +8,7 @@ interface Env {
   GEMINI_API_KEY: string; KAGGLE_KEY: string; JOB_TOKEN: string; TG_BOT_TOKEN: string;
   META_TOKEN: string; YT_CLIENT_ID: string; YT_CLIENT_SECRET: string; YT_REFRESH_TOKEN: string;
 }
-type Job = { id: string; source?: string; events?: { t: number; m: string }[]; progress?: { step: string; done: number; total: number; t: number }; status: "writing" | "uploading" | "pending" | "rendering" | "review" | "publishing" | "rejected" | "published" | "failed"; title: string;
+type Job = { id: string; source?: string; topic?: string; genAt?: number; tries?: number; events?: { t: number; m: string }[]; progress?: { step: string; done: number; total: number; t: number }; status: "writing" | "uploading" | "pending" | "rendering" | "review" | "publishing" | "rejected" | "published" | "failed"; title: string;
   createdAt?: number; claimedAt?: number; attempts?: number; caption: string; hashtags: string[]; hook?: string; gen?: string; words?: number; keywords?: string[]; yt_title?: string; yt_description?: string; scenes: { narration: string; visual_query: string }[]; results?: Record<string, string> };
 
 
@@ -111,6 +111,19 @@ async function startPipeline(env: Env, stub?: Job, topic?: string) {
   try { await pushKaggle(env); ev(job, "Kaggle renderer started"); await saveJob(env, job); }
   catch (e: any) { ev(job, "Kaggle start failed: " + String(e.message).slice(0, 200)); job.status = "failed"; await saveJob(env, job); await notifyAdmin(env, `Could not start Kaggle for "${job.title}": ${String(e.message).slice(0, 300)}`, {}, "error"); throw e; }
   return job;
+}
+
+// Writes the script for a "writing" stub, then queues and starts the renderer. Must run in a long-lived request or a cron run.
+async function runGenerate(env: Env, stub: Job) {
+  stub.genAt = Date.now(); ev(stub, "Writing the script"); await saveJob(env, stub);
+  try { await startPipeline(env, stub, stub.topic); }
+  catch (e: any) {
+    const cur = JSON.parse((await env.KV.get(`job:${stub.id}`)) || "null") as Job | null;
+    const j = cur && cur.status !== "writing" ? cur : stub; // keep what startPipeline already saved
+    const already = j.status === "failed";
+    j.status = "failed"; ev(j, "Failed: " + String(e.message).slice(0, 250)); await saveJob(env, j);
+    if (!already) await notifyAdmin(env, `⚠️ Could not create a video: ${String(e.message).slice(0, 300)}`, {}, "error");
+  }
 }
 
 // ---------- 3. Publishing ----------
@@ -216,6 +229,10 @@ async function autoPublish(env: Env) {
   for (const j of await recentJobs(env, 40)) {
     if (["writing", "pending", "rendering", "uploading"].includes(j.status) && Date.now() - (j.createdAt || 0) > 6 * 3600e3) { // janitor: expire jobs that never finished
       j.status = "failed"; ev(j, "Timed out after 6 hours"); await saveJob(env, j); continue;
+    }
+    if (j.status === "writing" && Date.now() - (j.genAt || j.createdAt || 0) > 4 * 60e3) { // script writing was cut off (e.g. the dashboard tab was closed)
+      if ((j.tries || 0) >= 1 || Date.now() - (j.createdAt || 0) > 30 * 60e3) { j.status = "failed"; ev(j, "The script could not be written in time"); await saveJob(env, j); continue; }
+      j.tries = 1; ev(j, "Script not finished; retrying in the background"); await runGenerate(env, j); break;
     }
     if (j.status === "publishing" && Date.now() - ((j.events || []).slice(-1)[0]?.t || j.createdAt || 0) > 4 * 60e3) { // resume an interrupted publish
       const todo = PLATFORMS.filter(pf => configured(env, pf) && !String(j.results?.[pf] || "").startsWith("ok:"));
@@ -388,12 +405,16 @@ async function handleApi(req: Request, env: Env, ctx: ExecutionContext, u: URL, 
   if (p === "state" && m === "GET") return jr(await apiState(env));
   if (p === "run" && m === "POST") {
     const body = (await req.json().catch(() => ({}))) as any; const topic = String(body.topic || "").slice(0, 200) || undefined;
-    const stub: Job = { id: crypto.randomUUID().slice(0, 8), createdAt: Date.now(), status: "writing", source: "auto", title: topic ? `Writing: ${topic}` : "Writing script...", caption: "", hashtags: [], scenes: [], events: [{ t: Date.now(), m: "Started from the dashboard" + (topic ? ` (topic: ${topic})` : "") }] };
+    const stub: Job = { id: crypto.randomUUID().slice(0, 8), createdAt: Date.now(), status: "writing", source: "auto", topic, title: topic ? `Writing: ${topic}` : "Writing script...", caption: "", hashtags: [], scenes: [], events: [{ t: Date.now(), m: "Started from the dashboard" + (topic ? ` (topic: ${topic})` : "") }] };
     await saveJob(env, stub);
-    ctx.waitUntil(startPipeline(env, stub, topic).catch(async e => { stub.status = "failed"; ev(stub, "Failed: " + String(e.message).slice(0, 250)); await saveJob(env, stub); await notifyAdmin(env, `⚠️ Could not create a video: ${String(e.message).slice(0, 300)}`, {}, "error"); }));
-    return jr({ ok: true, id: stub.id });
+    return jr({ ok: true, id: stub.id }); // the dashboard then calls /api/job/:id/generate (long request); the 30-minute cron retries it if the tab is closed
   }
   let x: RegExpMatchArray | null;
+  if ((x = p.match(/^job\/(\w+)\/generate$/)) && m === "POST") {
+    const job = JSON.parse((await env.KV.get(`job:${x[1]}`)) || "null") as Job | null; if (!job) return jr({ error: "no job" }, 404);
+    if (job.status !== "writing" || (job.genAt && Date.now() - job.genAt < 4 * 60e3)) return jr({ ok: false, error: "Already started." }, 409);
+    await runGenerate(env, job); return jr({ ok: true });
+  }
   if ((x = p.match(/^job\/(\w+)$/)) && m === "GET") { const j = JSON.parse((await env.KV.get(`job:${x[1]}`)) || "null") as Job | null; return j ? jr({ ...j, video: !!(await env.KV.get(`video:${j.id}`, "arrayBuffer")) }) : jr({ error: "no job" }, 404); }
   if ((x = p.match(/^job\/(\w+)\/(approve|reject|requeue)$/)) && m === "POST") {
     const job = JSON.parse((await env.KV.get(`job:${x[1]}`)) || "null") as Job | null; if (!job) return jr({ error: "no job" }, 404);

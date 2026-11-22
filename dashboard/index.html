@@ -122,6 +122,9 @@ async function api(path, opts={}){
   const j = await r.json().catch(()=>({})); if (!r.ok && !j.error) j.error="HTTP "+r.status; return j;
 }
 const post = (p,b) => api(p,{method:"POST",body:JSON.stringify(b||{})});
+async function startVideo(topic){ // creates the job, then writes the script in a second, long request while the progress panel polls
+  const r=await post("/api/run",{topic}); if(r.ok) post("/api/job/"+r.id+"/generate",{topic}).catch(()=>{}); return r;
+}
 function logout(msg){ LS.del("tfk_token"); S.token=""; sessionStorage.removeItem("tfk_active"); if(msg) setTimeout(()=>toast("Please sign in again"),50); render(); }
 
 /* ---------- data ---------- */
@@ -178,7 +181,7 @@ function studioView(){
   const topic=el("input",{type:"text",id:"topic",placeholder:"Optional: a topic, e.g. how volcanoes work"});
   const create=el("button",{class:"btn pri",id:"createBtn",onclick:async()=>{
     create.disabled=true; create.textContent="Starting…";
-    const r=await post("/api/run",{topic:topic.value.trim()});
+    const r=await startVideo(topic.value.trim());
     create.disabled=false; create.textContent="Create new video";
     if(r.ok){ S.active=r.id; sessionStorage.setItem("tfk_active",r.id); S.activeJob=null; topic.value=""; toast("Started. Watch the progress panel."); await pollActive(); startFast(); } else if(r.error!=="demo") toast("Could not start: "+r.error);
   }},"Create new video");
@@ -235,7 +238,7 @@ function platChips(j){
 }
 function drawVideos(){
   const c=$("#videosCard"); if(!c||!S.data) return; const jobs=S.data.jobs;
-  c.replaceChildren(el("h2",{},"Videos"),el("p",{class:"sub"},"Click a video to see its timeline, preview it and take action."),
+  fill(c,el("h2",{},"Videos"),el("p",{class:"sub"},"Click a video to see its timeline, preview it and take action."),
     jobs.length?el("div",{class:"tw"},el("table",{},el("thead",{},el("tr",{},...["Video","Status","Created","Published to","Views","Likes","Comments"].map(h=>el("th",{},h)))),
       el("tbody",{},...jobs.map(j=>{ const x=jobViews(j); return el("tr",{class:"click",onclick:()=>{S.active=j.id;sessionStorage.setItem("tfk_active",j.id);S.activeJob=null;pollActive();window.scrollTo({top:0,behavior:"smooth"});}},
         el("td",{},el("b",{},j.title),el("div",{class:"hint"},(j.source==="manual"?"Manual upload":(j.words+" words · "+j.scenes+" scenes")))),
@@ -243,7 +246,7 @@ function drawVideos(){
 }
 function drawProgress(){
   const c=$("#progressCard"); if(!c) return; const j=S.activeJob||S.data?.jobs.find(x=>x.id===S.active);
-  if(!j){ const last=S.data?.jobs?.[0]; c.replaceChildren(el("h2",{},"Live progress"),el("p",{class:"sub"},"Nothing selected. Start a video, or click one in the list."),last?el("div",{class:"hint"},"Latest: "+last.title+" ("+last.status+")"):null); return; }
+  if(!j){ const last=S.data?.jobs?.[0]; fill(c,el("h2",{},"Live progress"),el("p",{class:"sub"},"Nothing selected. Start a video, or click one in the list."),last?el("div",{class:"hint"},"Latest: "+last.title+" ("+last.status+")"):null); return; }
   const stage={writing:0,pending:1,rendering:1,uploading:2,review:2,publishing:3,published:4,failed:-1,rejected:-1}[j.status]; const p=j.progress||{};
   let pct={writing:8,pending:15,rendering:15+(p.total?65*(p.done/p.total):0)+(p.step==="assemble"?10:0)+(p.step==="upload"?15:0),uploading:60,review:100,publishing:100,published:100,failed:100,rejected:100}[j.status]||0;
   const steps=["Script","Render","Review","Publish"].map((n,i)=>el("div",{class:stage===i+0&&false?"":(j.status==="published"||i<Math.min(stage,3)?"done ":"")+(i===Math.min(stage,3)&&stage>=0&&j.status!=="published"?"on":"")},n));
@@ -253,7 +256,7 @@ function drawProgress(){
   if(["failed","pending"].includes(j.status)&&j.source!=="manual") acts.push(el("button",{class:"btn",onclick:e=>act(e.target,"/api/job/"+j.id+"/requeue","Retrying the render.",true)},"Retry render"));
   for(const [pf,r] of Object.entries(j.results||{})) if(String(r).startsWith("ERR")) acts.push(el("button",{class:"btn sm",onclick:e=>act(e.target,"/api/job/"+j.id+"/publish/"+pf,"Retried "+pf+".")},"Retry "+PLAT[pf].n));
   const evs=(j.events||[]).slice().reverse();
-  c.replaceChildren(el("h2",{},j.title),el("div",{class:"row",style:"margin-bottom:4px"},el("span",{class:"st "+j.status},j.status),el("span",{class:"hint"},j.source==="manual"?"Manual upload":"Automated · "+(j.words||0)+" words")),
+  fill(c,el("h2",{},j.title),el("div",{class:"row",style:"margin-bottom:4px"},el("span",{class:"st "+j.status},j.status),el("span",{class:"hint"},j.source==="manual"?"Manual upload":"Automated · "+(j.words||0)+" words")),
     el("div",{class:"steps"},steps),el("div",{class:"bar"},el("i",{style:`width:${Math.round(pct)}%`})),el("div",{class:"hint",style:"margin-top:6px"},label),
     acts.length?el("div",{class:"row",style:"margin-top:10px"},acts):null,
     hasVid&&!DEMO&&["review","publishing","published"].includes(j.status)?el("video",{controls:true,preload:"metadata",src:S.api+"/v/"+j.id+".mp4"}):null,
@@ -299,7 +302,7 @@ function drawInsights(){
   const rows=d.jobs.filter(j=>j.status==="published").slice(0,8).map(j=>{ const st=jobViews(j).st; const parts={}; for(const p of Object.keys(PLAT)) if(st[p]?.views) parts[p]=st[p].views; return {label:j.title,parts,total:Object.values(parts).reduce((a,b)=>a+b,0)}; });
   const ch=d.stats?.channel||{}; const tot={}; for(const j of d.jobs.filter(j=>j.status==="published")){ const st=jobViews(j).st; for(const p of Object.keys(st)){ const t=(tot[p]=tot[p]||{views:0,likes:0,comments:0}); t.views+=st[p].views||0;t.likes+=st[p].likes||0;t.comments+=st[p].comments||0; } }
   const refresh=el("button",{class:"btn sm",onclick:async e=>{ e.target.disabled=true; const r=await post("/api/stats/refresh"); e.target.disabled=false; if(r.ok) toast("Stats updated"); else if(r.error!=="demo") toast(r.error||"Could not update"); await refresh_(); }},"Update stats now");
-  c.replaceChildren(el("div",{class:"row"},el("h2",{style:"flex:1"},"Insights"),refresh),el("p",{class:"sub"},d.stats?"Reach and engagement as of "+when(d.stats.t)+" (refreshed every 6 hours).":"No stats collected yet."),
+  fill(c,el("div",{class:"row"},el("h2",{style:"flex:1"},"Insights"),refresh),el("p",{class:"sub"},d.stats?"Reach and engagement as of "+when(d.stats.t)+" (refreshed every 6 hours).":"No stats collected yet."),
     el("h3",{},"Views per video"),el("div",{class:"legend"},...Object.keys(PLAT).filter(p=>p!=="telegram").map(p=>el("span",{},el("i",{style:"background:"+PLAT[p].c}),PLAT[p].n))),rows.some(r=>r.total)?stackedBars(rows):el("div",{class:"empty"},"No view counts yet."),
     el("div",{class:"cols2"},el("div",{},el("h3",{},"Views over time"),lineChart(d.history,"views","var(--brand)")),el("div",{},el("h3",{},"Followers over time"),lineChart(d.history,"followers","var(--ok)"))),
     el("h3",{},"By platform"),el("div",{class:"tw"},el("table",{},el("thead",{},el("tr",{},...["Platform","Followers","Views","Likes","Comments","Note"].map(h=>el("th",{},h)))),el("tbody",{},...Object.keys(PLAT).map(p=>{ const t=tot[p]||{}; const err=d.stats?.errors?.[p]; return el("tr",{},el("td",{},el("b",{style:"color:"+PLAT[p].c},PLAT[p].n)),el("td",{},fmt(ch[p]?.followers)),el("td",{},fmt(t.views)),el("td",{},fmt(t.likes)),el("td",{},fmt(t.comments)),el("td",{class:"hint"},err||(p==="telegram"?"Telegram does not report views to bots":""))); })))),
@@ -309,7 +312,7 @@ const refresh_=()=>refresh(true);
 function nextRuns(){ const out=[]; const now=new Date(); for(let d=0;d<2;d++) for(const h of [6,12,18]){ const t=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()+d,h)); if(t>now) out.push(t); } return out.slice(0,3); }
 function drawInfo(){
   const c=$("#infoCard"); if(!c||!S.data) return; const d=S.data;
-  c.replaceChildren(el("h2",{},"Information"),el("div",{class:"cols2"},
+  fill(c,el("h2",{},"Information"),el("div",{class:"cols2"},
     el("div",{},el("h3",{},"Schedule"),el("p",{class:"hint"},"New videos: "+d.settings.crons.videos),el("p",{},"Next runs: "+nextRuns().map(t=>t.toLocaleString([],{weekday:"short",hour:"2-digit",minute:"2-digit"})).join(" · ")),el("p",{class:"hint"},"Health check: "+d.settings.crons.health+" · Stats: "+d.settings.crons.stats),
       el("h3",{},"Approval"),el("p",{},d.settings.autoPublishHours>0?`Videos not decided within ${d.settings.autoPublishHours} hours are published automatically.`:"Auto-publish is off. Every video waits for you.")),
     el("div",{},el("h3",{},"Platforms"),el("div",{class:"chips"},...Object.keys(PLAT).map(p=>el("span",{class:"chip "+(d.platforms[p]?"ok":"bad")},d.platforms[p]?"✓":"✗",PLAT[p].n))),
@@ -331,7 +334,7 @@ function drawAlerts(){
 async function alertAct(a,btn){
   const x=a.action; if(x.type==="settings") return go("settings"); if(x.type==="open"){ S.active=x.jobId; sessionStorage.setItem("tfk_active",x.jobId); S.activeJob=null; go("studio"); return pollActive(); }
   btn.disabled=true; let r;
-  if(x.type==="requeue") r=await post("/api/job/"+x.jobId+"/requeue"); else if(x.type==="retry-publish") r=await post("/api/job/"+x.jobId+"/publish/"+x.platform); else if(x.type==="run") r=await post("/api/run"); else if(x.type==="health") r=await post("/api/health");
+  if(x.type==="requeue") r=await post("/api/job/"+x.jobId+"/requeue"); else if(x.type==="retry-publish") r=await post("/api/job/"+x.jobId+"/publish/"+x.platform); else if(x.type==="run") r=await startVideo(""); else if(x.type==="health") r=await post("/api/health");
   btn.disabled=false; if(r&&(r.ok||r.ok===undefined&&!r.error)) toast("Done"); else if(r&&r.error!=="demo") toast(r?.error||r?.result||"Failed"); await refresh(true);
 }
 
