@@ -441,7 +441,7 @@ async function handleApi(req: Request, env: Env, ctx: ExecutionContext, u: URL, 
     const job = JSON.parse((await env.KV.get(`job:${x[1]}`)) || "null") as Job | null; if (!job || job.source !== "manual") return jr({ error: "no job" }, 404);
     const buf = await req.arrayBuffer(); if (buf.byteLength > 20 * 1048576) return jr({ error: "Video is larger than 20 MB (Telegram's limit for URL uploads). Compress it first." }, 413);
     if (buf.byteLength < 1000) return jr({ error: "File looks empty." }, 400);
-    await env.KV.put(`video:${job.id}`, buf, { expirationTtl: 86400 * 3 }); job.status = "review"; ev(job, `Video uploaded (${(buf.byteLength / 1048576).toFixed(1)} MB)`); await saveJob(env, job); return jr({ ok: true });
+    await env.KV.put(`video:${job.id}`, buf, { expirationTtl: 86400 * 3 }); if (job.status !== "published") job.status = "review"; ev(job, `Video uploaded (${(buf.byteLength / 1048576).toFixed(1)} MB)`); await saveJob(env, job); return jr({ ok: true });
   }
   if ((x = p.match(/^manual\/(\w+)\/publish$/)) && m === "POST") {
     const job = JSON.parse((await env.KV.get(`job:${x[1]}`)) || "null") as Job | null; if (!job || job.source !== "manual" || job.status !== "review") return jr({ error: "Upload the video first." }, 409);
