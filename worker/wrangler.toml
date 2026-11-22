@@ -1,4 +1,4 @@
-# Deployed automatically by GitHub Actions on every push to main (see .github/workflows/deploy-worker.yml)
+# Deployed automatically by GitHub Actions on every push to main (see .github/workflows/deploy-worker.yml).
 name = "faceless-video"
 main = "src/index.ts"
 compatibility_date = "2026-11-01"
