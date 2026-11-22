@@ -1,0 +1,31 @@
+name = "faceless-video"
+main = "src/index.ts"
+compatibility_date = "2026-11-01"
+
+[triggers]
+crons = ["0 6,12,18 * * *", "30 3 * * *", "*/30 * * * *", "15 */6 * * *"]   # 3 videos/day (UTC) - adjust
+
+[[kv_namespaces]]
+binding = "KV"
+id = "34780753f0d245a5b40584f02037075d"
+
+[ai]
+binding = "AI"
+
+[[rules]]
+type = "Text"
+globs = ["**/*.py"]
+
+[vars]
+NICHE = "fun science, animals, space and nature facts for kids"
+KAGGLE_USERNAME = "ssumandey"
+KAGGLE_KERNEL_SLUG = "faceless-renderer"
+WORKER_URL = "https://faceless-video.faceless-video.workers.dev"
+IG_USER_ID = "17841455405508536"
+AUTO_PUBLISH_HOURS = "6"   # videos waiting for review this long are published automatically; "0" turns it off
+YT_TOKEN_MAX_DAYS = "0"   # app is In production: refresh token does not expire after 7 days; "7" re-enables the warning
+FB_PAGE_ID = "1494309847093140"
+TG_CHAT_ID = "@tfk_toons4kids"
+TG_ADMIN_ID = ""   # your Telegram user ID: set it on the dashboard Settings page (stored in KV, not in git)
+# Secrets (wrangler secret put): GEMINI_API_KEY, KAGGLE_KEY, JOB_TOKEN, TG_BOT_TOKEN,
+# META_TOKEN (long-lived Page token), YT_CLIENT_ID, YT_CLIENT_SECRET, YT_REFRESH_TOKEN

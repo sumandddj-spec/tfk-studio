@@ -1,0 +1,2 @@
+{ "name": "faceless-video", "private": true, "scripts": { "dev": "wrangler dev", "deploy": "wrangler deploy" },
+  "devDependencies": { "wrangler": "^4", "@cloudflare/workers-types": "^5", "typescript": "^5" } }

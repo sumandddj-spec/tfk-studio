@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TFK Studio</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234f46e5'/%3E%3Cpath d='M12 9l11 7-11 7z' fill='white'/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#f5f6fa; --card:#fff; --ink:#161a2b; --muted:#667085; --line:#e5e7ee; --brand:#4f46e5; --brand-ink:#fff;
+  --ok:#0f9d6b; --warn:#c77700; --bad:#d93a3a; --info:#2563eb; --chip:#eef0f7;
+  --yt:#e5322d; --fb:#1877f2; --ig:#c13584; --tg:#229ed9; --shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.06);
+}
+@media (prefers-color-scheme: dark){:root{--bg:#0e1220;--card:#171c2e;--ink:#eceef6;--muted:#97a0b8;--line:#272d44;--brand:#7c78ff;--chip:#222842;--shadow:none}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--brand)}
+.top{position:sticky;top:0;z-index:20;background:var(--card);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:16px;padding:10px 16px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.2px}
+.brand i{width:28px;height:28px;border-radius:8px;background:var(--brand);display:grid;place-items:center}
+.brand i:after{content:"";border-left:10px solid #fff;border-top:6px solid transparent;border-bottom:6px solid transparent;margin-left:3px}
+nav{display:flex;gap:4px}
+nav button{border:0;background:none;padding:8px 14px;border-radius:8px;cursor:pointer;color:var(--muted);font-weight:600;position:relative}
+nav button.on{background:var(--chip);color:var(--ink)}
+nav .badge{background:var(--bad);color:#fff;border-radius:99px;font-size:11px;padding:1px 6px;margin-left:6px}
+.sp{flex:1}
+.conn{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}.dot.ok{background:var(--ok)}.dot.bad{background:var(--bad)}
+.wrap{max-width:1280px;margin:0 auto;padding:16px}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;align-items:start}
+@media(max-width:980px){.grid{grid-template-columns:1fr}.side{order:-1;position:static!important}}
+.side{position:sticky;top:70px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:var(--shadow);margin-bottom:16px}
+.card h2{margin:0 0 4px;font-size:16px}
+.card h3{margin:16px 0 6px;font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
+.sub{color:var(--muted);font-size:13px;margin:0 0 12px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:16px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;box-shadow:var(--shadow)}
+.kpi b{display:block;font-size:24px;line-height:1.2}.kpi span{color:var(--muted);font-size:12px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.btn{border:1px solid var(--line);background:var(--card);padding:8px 14px;border-radius:10px;cursor:pointer;font-weight:600}
+.btn:hover{border-color:var(--brand)}
+.btn.pri{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+.btn.bad{color:var(--bad)}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.btn.sm{padding:4px 10px;font-size:13px;border-radius:8px}
+input[type=text],input[type=password],input[type=number],textarea,select{width:100%;padding:9px 11px;border-radius:10px;border:1px solid var(--line);background:var(--bg)}
+textarea{min-height:70px;resize:vertical}
+label.f{display:block;margin:10px 0 4px;font-size:13px;font-weight:600}
+.hint{font-size:12px;color:var(--muted);margin-top:3px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{background:var(--chip);border-radius:99px;padding:2px 10px;font-size:12px;display:inline-flex;gap:5px;align-items:center}
+.chip.ok{color:var(--ok)}.chip.bad{color:var(--bad)}.chip.warn{color:var(--warn)}.chip.info{color:var(--info)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;color:var(--muted);font-size:12px;font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+tr.click{cursor:pointer}tr.click:hover td{background:var(--chip)}
+.tw{overflow-x:auto}
+.st{font-size:12px;font-weight:700;border-radius:6px;padding:2px 8px;background:var(--chip)}
+.st.published{color:var(--ok)}.st.failed,.st.rejected{color:var(--bad)}.st.review{color:var(--warn)}.st.rendering,.st.pending,.st.writing,.st.publishing,.st.uploading{color:var(--info)}
+.bar{height:10px;background:var(--chip);border-radius:99px;overflow:hidden}.bar>i{display:block;height:100%;background:var(--brand);transition:width .4s}
+.steps{display:flex;gap:6px;margin:10px 0}
+.steps div{flex:1;text-align:center;font-size:12px;padding:6px 2px;border-radius:8px;background:var(--chip);color:var(--muted)}
+.steps div.on{background:var(--brand);color:#fff}.steps div.done{color:var(--ok)}
+.ev{max-height:260px;overflow:auto;font-size:13px;border-top:1px solid var(--line);margin-top:10px;padding-top:6px}
+.ev div{padding:3px 0;display:flex;gap:8px}.ev time{color:var(--muted);flex:none;font-variant-numeric:tabular-nums}
+video{width:100%;max-height:360px;background:#000;border-radius:10px;margin-top:10px}
+.alert{border-left:4px solid var(--info);background:var(--chip);border-radius:10px;padding:10px 12px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start}
+.alert.high{border-color:var(--bad)}.alert.medium{border-color:var(--warn)}.alert.low{border-color:var(--info)}
+.alert .t{font-weight:700}.alert .d{color:var(--muted);font-size:13px;margin-top:2px;word-break:break-word}
+.lg{font-size:13px}.lg td{padding:6px 8px}
+.lv{font-weight:700;font-size:11px;text-transform:uppercase}.lv.error{color:var(--bad)}.lv.warn{color:var(--warn)}.lv.info{color:var(--muted)}
+.set{display:grid;grid-template-columns:1fr;gap:4px;padding:10px 0;border-bottom:1px solid var(--line)}
+.set:last-child{border:0}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:700px){.cols2{grid-template-columns:1fr}}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;z-index:50;max-width:90vw;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.login{max-width:440px;margin:12vh auto;padding:0 16px}
+.empty{color:var(--muted);padding:12px 0;font-size:14px}
+.rec li{margin:6px 0}
+svg text{fill:var(--muted);font-size:11px}
+.legend{display:flex;gap:12px;font-size:12px;color:var(--muted);flex-wrap:wrap;margin:6px 0}.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+"use strict";
+const DEFAULT_API = "https://faceless-video.faceless-video.workers.dev";
+const DEMO = new URLSearchParams(location.search).has("demo");
+const LS = { get(k){ try{return localStorage.getItem(k)}catch{return null} }, set(k,v){ try{localStorage.setItem(k,v)}catch{} }, del(k){ try{localStorage.removeItem(k)}catch{} } };
+const PLAT = { youtube:{n:"YouTube",c:"var(--yt)"}, facebook:{n:"Facebook",c:"var(--fb)"}, instagram:{n:"Instagram",c:"var(--ig)"}, telegram:{n:"Telegram",c:"var(--tg)"} };
+const S = { api: LS.get("tfk_api") || DEFAULT_API, token: LS.get("tfk_token") || "", page: "studio", data: null, cfg: null, active: sessionStorage.getItem("tfk_active") || null, activeJob: null, busy: {} };
+
+/* ---------- helpers ---------- */
+function el(tag, props, ...kids){
+  const e = document.createElement(tag);
+  for (const [k,v] of Object.entries(props||{})){
+    if (k==="class") e.className=v; else if (k==="html") e.innerHTML=v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (v===true) e.setAttribute(k,""); else if (v!==false && v!=null) e.setAttribute(k,v);
+  }
+  for (const k of kids.flat()) if (k!=null && k!==false) e.append(k.nodeType?k:document.createTextNode(String(k)));
+  return e;
+}
+const $ = (s,r=document)=>r.querySelector(s);
+const fill = (n,...k)=>n.replaceChildren(...k.flat().filter(Boolean));
+const fmt = n => n==null?"–":Number(n).toLocaleString();
+const ago = t => { if(!t) return "earlier"; const s=Math.max(0,(Date.now()-t)/1000); if(s<60)return"just now"; if(s<3600)return Math.floor(s/60)+" min ago"; if(s<86400)return Math.floor(s/3600)+" h ago"; return Math.floor(s/86400)+" d ago"; };
+const clock = t => new Date(t).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit",second:"2-digit"});
+const when = t => !t ? "–" : new Date(t).toLocaleString([], {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
+function toast(m){ const t=el("div",{class:"toast"},m); document.body.append(t); setTimeout(()=>t.remove(),4200); }
+async function api(path, opts={}){
+  if (DEMO){
+    if (path==="/api/state") return (await fetch("demo-state.json")).json();
+    if (path==="/api/config") return (await fetch("demo-config.json")).json();
+    toast("Demo mode: actions are disabled"); return {ok:false, error:"demo"};
+  }
+  const r = await fetch(S.api+path, {...opts, headers:{Authorization:"Bearer "+S.token, ...(opts.body&&!(opts.body instanceof ArrayBuffer||opts.body instanceof Blob)?{"content-type":"application/json"}:{}), ...(opts.headers||{})}});
+  if (r.status===401){ logout(true); throw new Error("Not signed in"); }
+  const j = await r.json().catch(()=>({})); if (!r.ok && !j.error) j.error="HTTP "+r.status; return j;
+}
+const post = (p,b) => api(p,{method:"POST",body:JSON.stringify(b||{})});
+function logout(msg){ LS.del("tfk_token"); S.token=""; sessionStorage.removeItem("tfk_active"); if(msg) setTimeout(()=>toast("Please sign in again"),50); render(); }
+
+/* ---------- data ---------- */
+const jobViews = j => { const st=(S.data?.stats?.videos||{})[j.id]||{}; let views=0,likes=0,comments=0; for(const p of Object.values(st)){views+=p.views||0;likes+=p.likes||0;comments+=p.comments||0} return {st,views,likes,comments}; };
+async function refresh(quiet){
+  try { S.data = await api("/api/state"); } catch(e){ if(!quiet) toast(e.message); setConn(false); return; }
+  setConn(true); drawAll();
+  if (S.active) await pollActive();
+}
+function setConn(ok){ const d=$("#conn"); if(d){ d.firstChild.className="dot "+(ok?"ok":"bad"); d.lastChild.textContent = DEMO?"Demo data":ok?"Connected":"Offline"; } }
+async function pollActive(){
+  if (!S.active || DEMO) { S.activeJob = S.data?.jobs.find(j=>j.id===S.active)||null; drawProgress(); return; }
+  try { const j = await api("/api/job/"+S.active); if (!j.error) S.activeJob = j; } catch{}
+  drawProgress();
+}
+function drawAll(){
+  drawBadge(); if (S.page==="studio"){ drawKpis(); drawVideos(); drawInsights(); drawInfo(); drawProgress(); } if (S.page==="alerts") drawAlerts();
+}
+function drawBadge(){ const n=(S.data?.alerts||[]).filter(a=>a.level!=="low").length; const b=$("#alertBadge"); if(b){ b.textContent=n; b.classList.toggle("hidden",!n);} }
+
+/* ---------- layout ---------- */
+function render(){
+  const app = $("#app"); app.replaceChildren();
+  if (!S.token && !DEMO){ app.append(loginView()); return; }
+  app.append(
+    el("header",{class:"top"},
+      el("div",{class:"brand"},el("i"),"TFK Studio"),
+      el("nav",{}, ...[["studio","Studio"],["alerts","Alerts"],["settings","Settings"]].map(([k,n])=>
+        el("button",{class:S.page===k?"on":"","data-p":k,onclick:()=>go(k)},n,k==="alerts"?el("span",{class:"badge hidden",id:"alertBadge"}):null))),
+      el("div",{class:"sp"}),
+      el("div",{class:"conn",id:"conn"},el("span",{class:"dot"}),el("span",{},"Connecting…")),
+      el("button",{class:"btn sm",onclick:()=>refresh()},"Refresh"),
+      DEMO?null:el("button",{class:"btn sm",onclick:()=>logout()},"Sign out")),
+    el("div",{class:"wrap",id:"page"}));
+  buildPage(); refresh(true);
+}
+function go(p){ S.page=p; document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.p===p)); buildPage(); if(p==="settings") loadCfg(); else drawAll(); if(S.data) drawBadge(); }
+function buildPage(){ const pg=$("#page"); pg.replaceChildren(S.page==="studio"?studioView():S.page==="alerts"?alertsView():settingsView()); }
+function loginView(){
+  const url=el("input",{type:"text",value:S.api,autocomplete:"off"}), tok=el("input",{type:"password",autocomplete:"current-password",placeholder:"Paste your admin token"});
+  const go=async()=>{ S.api=url.value.trim().replace(/\/$/,""); S.token=tok.value.trim(); if(!S.token) return;
+    try{ const r=await fetch(S.api+"/api/state",{headers:{Authorization:"Bearer "+S.token}}); if(r.status===401){toast("That token was not accepted");S.token="";return;} if(!r.ok) throw new Error("HTTP "+r.status);
+      LS.set("tfk_api",S.api); LS.set("tfk_token",S.token); render(); }catch(e){ S.token=""; toast("Could not reach the server: "+e.message); } };
+  tok.addEventListener("keydown",e=>{ if(e.key==="Enter") go(); });
+  return el("div",{class:"login"},el("div",{class:"card"},
+    el("div",{class:"brand",style:"margin-bottom:10px"},el("i"),"TFK Studio"),
+    el("p",{class:"sub"},"Sign in with the admin token (JOB_TOKEN) of your Worker. It is stored only in this browser."),
+    el("label",{class:"f"},"Worker address"),url,el("label",{class:"f"},"Admin token"),tok,
+    el("div",{class:"row",style:"margin-top:14px"},el("button",{class:"btn pri",onclick:go},"Sign in"),el("a",{href:"?demo=1"},"View demo"))));
+}
+
+/* ---------- STUDIO ---------- */
+function studioView(){
+  const topic=el("input",{type:"text",id:"topic",placeholder:"Optional: a topic, e.g. how volcanoes work"});
+  const create=el("button",{class:"btn pri",id:"createBtn",onclick:async()=>{
+    create.disabled=true; create.textContent="Starting…";
+    const r=await post("/api/run",{topic:topic.value.trim()});
+    create.disabled=false; create.textContent="Create new video";
+    if(r.ok){ S.active=r.id; sessionStorage.setItem("tfk_active",r.id); S.activeJob=null; topic.value=""; toast("Started. Watch the progress panel."); await pollActive(); startFast(); } else if(r.error!=="demo") toast("Could not start: "+r.error);
+  }},"Create new video");
+  const file=el("input",{type:"file",accept:"video/mp4,video/quicktime,video/*",id:"vfile"});
+  const f={}; const field=(id,label,tag="input",ph="",hint="")=>{ f[id]=el(tag,tag==="input"?{type:"text",placeholder:ph}:{placeholder:ph}); return [el("label",{class:"f"},label),f[id],hint?el("div",{class:"hint"},hint):null]; };
+  const plats=Object.keys(PLAT).map(k=>el("label",{class:"chip",style:"cursor:pointer"},el("input",{type:"checkbox",value:k,checked:true}),PLAT[k].n));
+  const up=el("button",{class:"btn pri",id:"upBtn",onclick:()=>manualUpload(file,f,plats,up,prog)},"Upload & publish");
+  const prog=el("div",{class:"bar hidden",style:"margin-top:10px"},el("i",{style:"width:0"}));
+  return el("div",{class:"grid"},
+    el("div",{},
+      el("section",{class:"kpis",id:"kpis"}),
+      el("section",{class:"card"},el("h2",{},"1. Create new video"),el("p",{class:"sub"},"Writes a script, renders the video on Kaggle, then sends it to your Telegram for approval. Progress appears on the right."),el("div",{class:"row"},el("div",{style:"flex:1;min-width:220px"},topic),create)),
+      el("section",{class:"card"},el("h2",{},"2. Upload your own video"),el("p",{class:"sub"},"Skips the automation. Publishes a video you made yourself to the platforms you tick. MP4, up to 20 MB, vertical 9:16 works best."),
+        file,...field("title","Title *","input","Short, specific title"),...field("caption","Caption","textarea","What viewers should know"),...field("hashtags","Hashtags","input","#fun #science #kids","Separate with spaces or commas."),
+        el("details",{style:"margin-top:8px"},el("summary",{},"YouTube-specific text (optional)"),...field("yt_title","YouTube title","input","Defaults to the title"),...field("yt_description","YouTube description","textarea","Defaults to the caption")),
+        el("h3",{},"Publish to"),el("div",{class:"chips"},plats),el("div",{class:"row",style:"margin-top:14px"},up),prog),
+      el("section",{class:"card",id:"insightsCard"}),
+      el("section",{class:"card",id:"videosCard"}),
+      el("section",{class:"card",id:"infoCard"})),
+    el("aside",{class:"side"},el("section",{class:"card",id:"progressCard"})));
+}
+async function manualUpload(file,f,plats,btn,prog){
+  const title=f.title.value.trim(); const fl=file.files[0];
+  if(!fl) return toast("Choose a video file first"); if(!title) return toast("Please enter a title");
+  if(fl.size>20*1048576) return toast("That file is "+(fl.size/1048576).toFixed(1)+" MB. The limit is 20 MB; compress it first.");
+  const platforms=plats.map(l=>l.firstChild).filter(i=>i.checked).map(i=>i.value); if(!platforms.length) return toast("Tick at least one platform");
+  if(!confirm("Publish “"+title+"” to "+platforms.map(p=>PLAT[p].n).join(", ")+" now?")) return;
+  btn.disabled=true; btn.textContent="Uploading…"; prog.classList.remove("hidden"); const bar=prog.firstChild;
+  try{
+    const c=await post("/api/manual",{title,caption:f.caption.value,hashtags:f.hashtags.value,yt_title:f.yt_title.value,yt_description:f.yt_description.value});
+    if(!c.ok) throw new Error(c.error||"could not create");
+    S.active=c.id; sessionStorage.setItem("tfk_active",c.id); S.activeJob=null;
+    await new Promise((res,rej)=>{ const x=new XMLHttpRequest(); x.open("PUT",S.api+"/api/manual/"+c.id+"/video"); x.setRequestHeader("Authorization","Bearer "+S.token);
+      x.upload.onprogress=e=>{ if(e.lengthComputable) bar.style.width=(e.loaded/e.total*100)+"%"; };
+      x.onload=()=>{ let j={}; try{j=JSON.parse(x.responseText)}catch{} x.status<300?res():rej(new Error(j.error||"upload failed ("+x.status+")")); }; x.onerror=()=>rej(new Error("network error")); x.send(fl); });
+    btn.textContent="Publishing…"; toast("Uploaded. Publishing now…"); startFast();
+    const p=await post("/api/manual/"+c.id+"/publish",{platforms}); if(!p.ok) throw new Error(p.error||"publish failed");
+    toast("Publishing finished. See the progress panel for each platform."); file.value=""; for(const k of ["title","caption","hashtags","yt_title","yt_description"]) f[k].value="";
+  }catch(e){ toast("Upload problem: "+e.message); }
+  btn.disabled=false; btn.textContent="Upload & publish"; prog.classList.add("hidden"); bar.style.width="0"; await refresh(true);
+}
+let fastTimer=null;
+function startFast(){ clearInterval(fastTimer); let n=0; fastTimer=setInterval(async()=>{ n++; await pollActive(); const st=S.activeJob?.status; if(n>400||(["published","failed","rejected"].includes(st))){ clearInterval(fastTimer); refresh(true); } if(st==="review"&&n%10===0) refresh(true); },3000); }
+
+function drawKpis(){
+  const d=S.data, k=$("#kpis"); if(!k||!d) return;
+  const pub=d.jobs.filter(j=>j.status==="published"); let v=0,l=0,c=0; for(const j of pub){const x=jobViews(j);v+=x.views;l+=x.likes;c+=x.comments}
+  const fol=Object.values(d.stats?.channel||{}).reduce((n,x)=>n+(x.followers||0),0), live=d.jobs.filter(j=>["writing","pending","rendering","review","publishing","uploading"].includes(j.status)).length;
+  k.replaceChildren(...[["Published",pub.length],["In progress",live],["Views",v],["Likes",l],["Comments",c],["Followers",fol]].map(([n,val])=>el("div",{class:"kpi"},el("b",{},fmt(val)),el("span",{},n))));
+}
+function platChips(j){
+  return el("div",{class:"chips"},...Object.keys(PLAT).filter(p=>j.results?.[p]).map(p=>{ const r=j.results[p],ok=String(r).startsWith("ok:"); const link=jobViews(j).st[p]?.link;
+    return el(link?"a":"span",{class:"chip "+(ok?"ok":"bad"),title:ok?"Published":r,...(link?{href:link,target:"_blank",rel:"noopener"}:{})},ok?"✓":"✗",PLAT[p].n); }));
+}
+function drawVideos(){
+  const c=$("#videosCard"); if(!c||!S.data) return; const jobs=S.data.jobs;
+  c.replaceChildren(el("h2",{},"Videos"),el("p",{class:"sub"},"Click a video to see its timeline, preview it and take action."),
+    jobs.length?el("div",{class:"tw"},el("table",{},el("thead",{},el("tr",{},...["Video","Status","Created","Published to","Views","Likes","Comments"].map(h=>el("th",{},h)))),
+      el("tbody",{},...jobs.map(j=>{ const x=jobViews(j); return el("tr",{class:"click",onclick:()=>{S.active=j.id;sessionStorage.setItem("tfk_active",j.id);S.activeJob=null;pollActive();window.scrollTo({top:0,behavior:"smooth"});}},
+        el("td",{},el("b",{},j.title),el("div",{class:"hint"},(j.source==="manual"?"Manual upload":(j.words+" words · "+j.scenes+" scenes")))),
+        el("td",{},el("span",{class:"st "+j.status},j.status)),el("td",{title:when(j.createdAt)},ago(j.createdAt)),el("td",{},platChips(j)),el("td",{},fmt(x.views||null)),el("td",{},fmt(x.likes||null)),el("td",{},fmt(x.comments||null))); })))):el("div",{class:"empty"},"No videos yet."));
+}
+function drawProgress(){
+  const c=$("#progressCard"); if(!c) return; const j=S.activeJob||S.data?.jobs.find(x=>x.id===S.active);
+  if(!j){ const last=S.data?.jobs?.[0]; c.replaceChildren(el("h2",{},"Live progress"),el("p",{class:"sub"},"Nothing selected. Start a video, or click one in the list."),last?el("div",{class:"hint"},"Latest: "+last.title+" ("+last.status+")"):null); return; }
+  const stage={writing:0,pending:1,rendering:1,uploading:2,review:2,publishing:3,published:4,failed:-1,rejected:-1}[j.status]; const p=j.progress||{};
+  let pct={writing:8,pending:15,rendering:15+(p.total?65*(p.done/p.total):0)+(p.step==="assemble"?10:0)+(p.step==="upload"?15:0),uploading:60,review:100,publishing:100,published:100,failed:100,rejected:100}[j.status]||0;
+  const steps=["Script","Render","Review","Publish"].map((n,i)=>el("div",{class:stage===i+0&&false?"":(j.status==="published"||i<Math.min(stage,3)?"done ":"")+(i===Math.min(stage,3)&&stage>=0&&j.status!=="published"?"on":"")},n));
+  const label={writing:"Writing the script…",pending:"Waiting for the Kaggle renderer…",rendering:p.total?`Rendering: ${p.step==="assemble"?"assembling":p.step==="upload"?"uploading":`scene ${Math.min(p.done+(p.step==="voice"?1:0),p.total)} of ${p.total}`}`:"Rendering…",uploading:"Waiting for upload…",review:"Ready. Waiting for your decision.",publishing:"Publishing…",published:"Published",failed:"Failed",rejected:"Rejected"}[j.status]||j.status;
+  const acts=[]; const full=j; const hasVid=["review","publishing","published"].includes(j.status)||j.video;
+  if(j.status==="review") acts.push(el("button",{class:"btn pri",onclick:e=>act(e.target,"/api/job/"+j.id+"/approve","Published (or publishing). Watch the timeline.")},"Approve & publish"),el("button",{class:"btn bad",onclick:e=>act(e.target,"/api/job/"+j.id+"/reject","Rejected.")},"Reject"));
+  if(["failed","pending"].includes(j.status)&&j.source!=="manual") acts.push(el("button",{class:"btn",onclick:e=>act(e.target,"/api/job/"+j.id+"/requeue","Retrying the render.",true)},"Retry render"));
+  for(const [pf,r] of Object.entries(j.results||{})) if(String(r).startsWith("ERR")) acts.push(el("button",{class:"btn sm",onclick:e=>act(e.target,"/api/job/"+j.id+"/publish/"+pf,"Retried "+pf+".")},"Retry "+PLAT[pf].n));
+  const evs=(j.events||[]).slice().reverse();
+  c.replaceChildren(el("h2",{},j.title),el("div",{class:"row",style:"margin-bottom:4px"},el("span",{class:"st "+j.status},j.status),el("span",{class:"hint"},j.source==="manual"?"Manual upload":"Automated · "+(j.words||0)+" words")),
+    el("div",{class:"steps"},steps),el("div",{class:"bar"},el("i",{style:`width:${Math.round(pct)}%`})),el("div",{class:"hint",style:"margin-top:6px"},label),
+    acts.length?el("div",{class:"row",style:"margin-top:10px"},acts):null,
+    hasVid&&!DEMO&&["review","publishing","published"].includes(j.status)?el("video",{controls:true,preload:"metadata",src:S.api+"/v/"+j.id+".mp4"}):null,
+    j.status==="published"?el("div",{style:"margin-top:10px"},platChips(j)):null,
+    j.caption?el("p",{class:"hint",style:"margin-top:10px"},j.caption+" "+(j.hashtags||[]).map(h=>"#"+String(h).replace(/^#/,"")).join(" ")):null,
+    el("div",{class:"ev"},evs.length?evs.map(e=>el("div",{},el("time",{},clock(e.t)),el("span",{},e.m))):el("div",{class:"hint"},"No events yet.")));
+}
+async function act(btn,path,okMsg,quiet){ btn.disabled=true; const r=await post(path); btn.disabled=false; if(r.ok===false||r.error){ if(r.error!=="demo") toast(r.error||"Failed"); } else { toast(okMsg); startFast(); } await refresh(true); }
+
+/* ---------- insights ---------- */
+function svgEl(tag,a,...k){ const e=document.createElementNS("http://www.w3.org/2000/svg",tag); for(const [x,v] of Object.entries(a||{})) e.setAttribute(x,v); for(const c of k) if(c) e.append(c.nodeType?c:document.createTextNode(c)); return e; }
+function stackedBars(rows){
+  const W=560,rh=26,H=rows.length*rh+8,max=Math.max(1,...rows.map(r=>r.total)),lw=150; const s=svgEl("svg",{viewBox:`0 0 ${W} ${H}`,width:"100%",role:"img","aria-label":"Views per video"});
+  rows.forEach((r,i)=>{ const y=i*rh+4; s.append(svgEl("text",{x:0,y:y+15},r.label.length>22?r.label.slice(0,21)+"…":r.label)); let x=lw;
+    for(const [k,v] of Object.entries(r.parts)){ if(!v) continue; const w=Math.max(2,(W-lw-50)*v/max); s.append(svgEl("rect",{x,y,width:w,height:18,rx:3,fill:PLAT[k].c})); x+=w; }
+    s.append(svgEl("text",{x:x+6,y:y+14},fmt(r.total))); }); return s;
+}
+function lineChart(pts,key,color){
+  if(pts.length<2) return el("div",{class:"empty"},"The trend appears after a few stats refreshes.");
+  const W=560,H=150,p=28,vals=pts.map(x=>x[key]||0),max=Math.max(1,...vals),min=Math.min(...vals); const X=i=>p+(W-2*p)*i/(pts.length-1), Y=v=>H-p-(H-2*p)*(v-min)/Math.max(1,max-min);
+  const s=svgEl("svg",{viewBox:`0 0 ${W} ${H}`,width:"100%",role:"img","aria-label":key+" over time"});
+  s.append(svgEl("polyline",{points:vals.map((v,i)=>X(i)+","+Y(v)).join(" "),fill:"none",stroke:color,"stroke-width":2.5,"stroke-linejoin":"round"}),svgEl("text",{x:p,y:12},fmt(max)),svgEl("text",{x:p,y:H-8},when(pts[0].t)),svgEl("text",{x:W-p,y:H-8,"text-anchor":"end"},when(pts.at(-1).t)));
+  return s;
+}
+function recommendations(d){
+  const out=[]; const pub=d.jobs.filter(j=>j.status==="published"); const withViews=pub.map(j=>({j,...jobViews(j)}));
+  const done=d.jobs.filter(j=>["published","failed","rejected"].includes(j.status)&&j.source!=="manual");
+  if(done.length>=3){ const ok=done.filter(j=>j.status==="published").length; out.push(`Pipeline reliability: ${Math.round(100*ok/done.length)}% of the last ${done.length} automated videos were published${ok/done.length<.8?". Check the Alerts page for repeated failures.":"."}`); }
+  const llama=d.jobs.filter(j=>j.gen&&j.gen.startsWith("llama")).length, auto=d.jobs.filter(j=>j.gen).length;
+  if(auto>=3&&llama/auto>.5) out.push(`${Math.round(100*llama/auto)}% of scripts were written by the backup model because Gemini was busy or slow. Scripts are usually better from Gemini; consider a retry or a second Gemini key.`);
+  if(withViews.length){ const best=[...withViews].sort((a,b)=>b.views-a.views)[0]; if(best.views>0) out.push(`Top video so far: “${best.j.title}” with ${fmt(best.views)} views. Make more like it.`);
+    const eng=withViews.filter(x=>x.views>0).map(x=>({...x,r:(x.likes+x.comments)/x.views})).sort((a,b)=>b.r-a.r)[0]; if(eng) out.push(`Best engagement: “${eng.j.title}” (${(eng.r*100).toFixed(1)}% of viewers liked or commented).`); }
+  if(withViews.length>=5){ const by={}; for(const x of withViews){ const h=new Date(x.j.createdAt).getHours(); (by[h]=by[h]||[]).push(x.views); } const best=Object.entries(by).map(([h,a])=>[h,a.reduce((s,v)=>s+v,0)/a.length]).sort((a,b)=>b[1]-a[1])[0]; if(best&&best[1]>0) out.push(`Videos created around ${String(best[0]).padStart(2,"0")}:00 your local time average the most views (${fmt(Math.round(best[1]))}).`); }
+  const tags={}; for(const x of withViews) for(const h of x.j.hashtags||[]) tags[h]=(tags[h]||0)+x.views; const top=Object.entries(tags).sort((a,b)=>b[1]-a[1]).slice(0,4).filter(t=>t[1]>0); if(top.length) out.push("Hashtags attached to your most-viewed videos: "+top.map(t=>"#"+String(t[0]).replace(/^#/,"")).join(", ")+".");
+  const priv=Object.values(d.stats?.videos||{}).filter(v=>v.youtube?.privacy==="private").length; if(priv) out.push(`${priv} YouTube video${priv>1?"s are":" is"} still Private, so nobody can see ${priv>1?"them":"it"}. Make them public in YouTube Studio (Google’s upload audit is the cause).`);
+  const week=pub.filter(j=>Date.now()-j.createdAt<7*864e5).length; out.push(`You published ${week} video${week===1?"":"s"} in the last 7 days.`);
+  const wc=pub.filter(j=>j.words).map(j=>j.words); if(wc.length) out.push(`Average script length: ${Math.round(wc.reduce((a,b)=>a+b,0)/wc.length)} words (about ${Math.round(wc.reduce((a,b)=>a+b,0)/wc.length/3.1)} seconds of narration).`);
+  if(!d.stats||!Object.keys(d.stats.videos||{}).length) out.push("Views, likes and comments will appear after the first stats refresh (every 6 hours, or use the button above).");
+  return out;
+}
+function drawInsights(){
+  const c=$("#insightsCard"); if(!c||!S.data) return; const d=S.data;
+  const rows=d.jobs.filter(j=>j.status==="published").slice(0,8).map(j=>{ const st=jobViews(j).st; const parts={}; for(const p of Object.keys(PLAT)) if(st[p]?.views) parts[p]=st[p].views; return {label:j.title,parts,total:Object.values(parts).reduce((a,b)=>a+b,0)}; });
+  const ch=d.stats?.channel||{}; const tot={}; for(const j of d.jobs.filter(j=>j.status==="published")){ const st=jobViews(j).st; for(const p of Object.keys(st)){ const t=(tot[p]=tot[p]||{views:0,likes:0,comments:0}); t.views+=st[p].views||0;t.likes+=st[p].likes||0;t.comments+=st[p].comments||0; } }
+  const refresh=el("button",{class:"btn sm",onclick:async e=>{ e.target.disabled=true; const r=await post("/api/stats/refresh"); e.target.disabled=false; if(r.ok) toast("Stats updated"); else if(r.error!=="demo") toast(r.error||"Could not update"); await refresh_(); }},"Update stats now");
+  c.replaceChildren(el("div",{class:"row"},el("h2",{style:"flex:1"},"Insights"),refresh),el("p",{class:"sub"},d.stats?"Reach and engagement as of "+when(d.stats.t)+" (refreshed every 6 hours).":"No stats collected yet."),
+    el("h3",{},"Views per video"),el("div",{class:"legend"},...Object.keys(PLAT).filter(p=>p!=="telegram").map(p=>el("span",{},el("i",{style:"background:"+PLAT[p].c}),PLAT[p].n))),rows.some(r=>r.total)?stackedBars(rows):el("div",{class:"empty"},"No view counts yet."),
+    el("div",{class:"cols2"},el("div",{},el("h3",{},"Views over time"),lineChart(d.history,"views","var(--brand)")),el("div",{},el("h3",{},"Followers over time"),lineChart(d.history,"followers","var(--ok)"))),
+    el("h3",{},"By platform"),el("div",{class:"tw"},el("table",{},el("thead",{},el("tr",{},...["Platform","Followers","Views","Likes","Comments","Note"].map(h=>el("th",{},h)))),el("tbody",{},...Object.keys(PLAT).map(p=>{ const t=tot[p]||{}; const err=d.stats?.errors?.[p]; return el("tr",{},el("td",{},el("b",{style:"color:"+PLAT[p].c},PLAT[p].n)),el("td",{},fmt(ch[p]?.followers)),el("td",{},fmt(t.views)),el("td",{},fmt(t.likes)),el("td",{},fmt(t.comments)),el("td",{class:"hint"},err||(p==="telegram"?"Telegram does not report views to bots":""))); })))),
+    el("h3",{},"What the data suggests"),el("ul",{class:"rec"},...recommendations(d).map(t=>el("li",{},t))));
+}
+const refresh_=()=>refresh(true);
+function nextRuns(){ const out=[]; const now=new Date(); for(let d=0;d<2;d++) for(const h of [6,12,18]){ const t=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()+d,h)); if(t>now) out.push(t); } return out.slice(0,3); }
+function drawInfo(){
+  const c=$("#infoCard"); if(!c||!S.data) return; const d=S.data;
+  c.replaceChildren(el("h2",{},"Information"),el("div",{class:"cols2"},
+    el("div",{},el("h3",{},"Schedule"),el("p",{class:"hint"},"New videos: "+d.settings.crons.videos),el("p",{},"Next runs: "+nextRuns().map(t=>t.toLocaleString([],{weekday:"short",hour:"2-digit",minute:"2-digit"})).join(" · ")),el("p",{class:"hint"},"Health check: "+d.settings.crons.health+" · Stats: "+d.settings.crons.stats),
+      el("h3",{},"Approval"),el("p",{},d.settings.autoPublishHours>0?`Videos not decided within ${d.settings.autoPublishHours} hours are published automatically.`:"Auto-publish is off. Every video waits for you.")),
+    el("div",{},el("h3",{},"Platforms"),el("div",{class:"chips"},...Object.keys(PLAT).map(p=>el("span",{class:"chip "+(d.platforms[p]?"ok":"bad")},d.platforms[p]?"✓":"✗",PLAT[p].n))),
+      el("h3",{},"Content"),el("p",{class:"hint"},"Topic area: "+(d.settings.niche||"–")),el("h3",{},"Health"),el("p",{class:"hint"},d.health?("Last check "+ago(d.health.t)+": "+(d.health.issues.length?d.health.issues.length+" issue(s)":"all good")):"No health check yet."))));
+}
+
+/* ---------- ALERTS ---------- */
+function alertsView(){ return el("div",{},el("section",{class:"card",id:"actionsCard"}),el("section",{class:"card",id:"logCard"})); }
+function drawAlerts(){
+  const d=S.data; if(!d) return; const A=$("#actionsCard"), L=$("#logCard"); if(!A||!L) return;
+  fill(A,el("div",{class:"row"},el("h2",{style:"flex:1"},"Needs your attention"),el("button",{class:"btn sm",onclick:async e=>{ e.target.disabled=true; const r=await post("/api/health"); e.target.disabled=false; if(r.ok) toast(r.issues.length?r.issues.length+" issue(s) found":"All good"); await refresh(true); }},"Run health check")),
+    el("p",{class:"sub"},"Sorted by priority. Handle red items first."),
+    d.alerts.length?d.alerts.map(a=>el("div",{class:"alert "+a.level},el("div",{style:"flex:1"},el("div",{class:"t"},a.title),el("div",{class:"d"},a.detail)),
+      el("div",{class:"row"},a.action?el("button",{class:"btn sm pri",onclick:e=>alertAct(a,e.target)},a.action.label):null,el("button",{class:"btn sm",title:"Hide this alert",onclick:async()=>{ await post("/api/alerts/dismiss",{key:a.key}); await refresh(true); }},"Dismiss")))):el("div",{class:"empty"},"✓ Nothing needs your attention."));
+  fill(L,el("div",{class:"row"},el("h2",{style:"flex:1"},"Notifications and errors"),el("button",{class:"btn sm",onclick:async()=>{ if(confirm("Clear the log?")){ await post("/api/log/clear"); await refresh(true);} }},"Clear")),
+    el("p",{class:"sub"},"Everything the system sent to your Telegram, newest first."),
+    d.log.length?el("div",{class:"tw"},el("table",{class:"lg"},el("tbody",{},...d.log.map(l=>el("tr",{},el("td",{style:"white-space:nowrap;color:var(--muted)"},when(l.t)),el("td",{},el("span",{class:"lv "+l.level},l.level)),el("td",{style:"white-space:pre-wrap;word-break:break-word"},l.text)))))):el("div",{class:"empty"},"No notifications yet."));
+}
+async function alertAct(a,btn){
+  const x=a.action; if(x.type==="settings") return go("settings"); if(x.type==="open"){ S.active=x.jobId; sessionStorage.setItem("tfk_active",x.jobId); S.activeJob=null; go("studio"); return pollActive(); }
+  btn.disabled=true; let r;
+  if(x.type==="requeue") r=await post("/api/job/"+x.jobId+"/requeue"); else if(x.type==="retry-publish") r=await post("/api/job/"+x.jobId+"/publish/"+x.platform); else if(x.type==="run") r=await post("/api/run"); else if(x.type==="health") r=await post("/api/health");
+  btn.disabled=false; if(r&&(r.ok||r.ok===undefined&&!r.error)) toast("Done"); else if(r&&r.error!=="demo") toast(r?.error||r?.result||"Failed"); await refresh(true);
+}
+
+/* ---------- SETTINGS ---------- */
+const GROUPS=[
+ {t:"YouTube",test:"youtube",hint:"Client ID/secret come from Google Cloud; the refresh token comes from tools/yt_auth.py.",keys:["YT_CLIENT_ID","YT_CLIENT_SECRET","YT_REFRESH_TOKEN"]},
+ {t:"Facebook and Instagram",test:"meta",hint:"One Page access token (never expires) plus the two account IDs.",keys:["META_TOKEN","FB_PAGE_ID","IG_USER_ID"]},
+ {t:"Telegram",test:"telegram",hint:"Bot token from BotFather, the channel handle, and your own numeric user ID for reviews.",keys:["TG_BOT_TOKEN","TG_CHAT_ID","TG_ADMIN_ID"]},
+ {t:"Script writer (Gemini)",test:"gemini",keys:["GEMINI_API_KEY"]},
+ {t:"Video renderer (Kaggle)",test:"kaggle",keys:["KAGGLE_USERNAME","KAGGLE_KEY"]},
+ {t:"Behaviour",keys:["AUTO_PUBLISH_HOURS","NICHE"],hint:"Auto-publish hours: how long a video may wait for your decision (0 = never auto-publish)."}];
+const LABEL={YT_CLIENT_ID:"Client ID",YT_CLIENT_SECRET:"Client secret",YT_REFRESH_TOKEN:"Refresh token",META_TOKEN:"Page access token",FB_PAGE_ID:"Facebook Page ID",IG_USER_ID:"Instagram account ID",TG_BOT_TOKEN:"Bot token",TG_CHAT_ID:"Channel (e.g. @name)",TG_ADMIN_ID:"Your Telegram user ID",GEMINI_API_KEY:"Gemini API key",KAGGLE_USERNAME:"Kaggle username",KAGGLE_KEY:"Kaggle API key",AUTO_PUBLISH_HOURS:"Auto-publish after (hours)",NICHE:"Topic area",JOB_TOKEN:"Admin token"};
+function settingsView(){ return el("div",{style:"max-width:820px"},el("section",{class:"card"},el("h2",{},"Connections and keys"),el("p",{class:"sub"},"Changes are saved at once and become active everywhere within about a minute. Leave a field empty to keep the current value. Secrets are never shown in full after saving."),el("div",{id:"cfgBox"},el("div",{class:"empty"},"Loading…")))); }
+async function loadCfg(){ S.cfg=await api("/api/config"); drawCfg(); }
+function drawCfg(){
+  const box=$("#cfgBox"); if(!box||!S.cfg?.items) return; const by=Object.fromEntries(S.cfg.items.map(i=>[i.name,i]));
+  box.replaceChildren(...GROUPS.map(g=>{
+    const inputs={}; const rows=g.keys.map(k=>{ const it=by[k]||{}; const inp=el("input",{type:it.secret?"password":"text",placeholder:it.set?(it.secret?it.display+" (set). Type to replace":it.display):"Not set",autocomplete:"off",spellcheck:"false"}); inputs[k]=inp;
+      return el("div",{class:"set"},el("label",{class:"f",style:"margin:0"},LABEL[k]||k," ",el("span",{class:"chip "+(it.set?"ok":"bad")},it.set?"set":"empty"),it.source==="dashboard"?el("span",{class:"chip info"},"edited here"):null),inp,
+        it.source==="dashboard"?el("div",{},el("button",{class:"btn sm",onclick:async()=>{ if(!confirm("Remove the value saved here and fall back to the deployed value?")) return; await saveCfg({[k]:""}); }},"Revert to deployed value")):null); });
+    const res=el("span",{class:"hint"});
+    return el("div",{style:"margin-top:18px"},el("h3",{},g.t),g.hint?el("p",{class:"hint"},g.hint):null,rows,
+      el("div",{class:"row",style:"margin-top:10px"},el("button",{class:"btn pri",onclick:async()=>{ const v={}; for(const k of g.keys) if(inputs[k].value.trim()) v[k]=inputs[k].value.trim(); if(!Object.keys(v).length) return toast("Nothing to save"); await saveCfg(v); }},"Save"),
+        g.test?el("button",{class:"btn",onclick:async e=>{ e.target.disabled=true; res.textContent="Testing…"; const r=await post("/api/test/"+g.test); e.target.disabled=false; res.textContent=(r.ok?"✓ ":"✗ ")+(r.detail||r.error||""); res.style.color=r.ok?"var(--ok)":"var(--bad)"; }},"Test connection"):null,res));
+  }), tokenBox());
+}
+function tokenBox(){
+  const a=el("input",{type:"password",autocomplete:"new-password",placeholder:"New admin token (24+ characters)"}), b=el("input",{type:"password",autocomplete:"new-password",placeholder:"Repeat it"});
+  const gen=()=>{ const x=crypto.getRandomValues(new Uint8Array(24)); const t=Array.from(x,v=>v.toString(16).padStart(2,"0")).join(""); a.type=b.type="text"; a.value=b.value=t; };
+  return el("div",{style:"margin-top:26px;border-top:1px solid var(--line);padding-top:6px"},el("h3",{},"Admin token (JOB_TOKEN)"),
+    el("p",{class:"hint"},"This is the password for this dashboard and the Telegram buttons. Changing it signs you out of other devices and re-registers the Telegram webhook automatically. The Kaggle renderer is not affected, because it gets a fresh one-run token each time."),
+    el("label",{class:"f"},"New token"),a,el("label",{class:"f"},"Confirm"),b,
+    el("div",{class:"row",style:"margin-top:10px"},el("button",{class:"btn",onclick:gen},"Generate a strong one"),el("button",{class:"btn pri",onclick:async()=>{ if(a.value!==b.value) return toast("The two entries differ"); if(a.value.length<24) return toast("Use at least 24 characters"); if(!confirm("Change the admin token now? Save the new one somewhere safe first.")) return;
+      const r=await post("/api/config",{values:{JOB_TOKEN:a.value}}); if(r.ok){ const nt=a.value; a.value=b.value=""; toast("Token saved. Switching over (up to a minute)…"); let okNew=false; for(let i=0;i<20&&!okNew;i++){ await new Promise(z=>setTimeout(z,i?5000:1500)); try{ const t=await fetch(S.api+"/api/state",{headers:{Authorization:"Bearer "+nt}}); okNew=t.ok; }catch{} }
+        if(okNew){ S.token=nt; LS.set("tfk_token",nt); toast("Admin token changed. Telegram webhook: "+(r.webhook&&/"ok":true/.test(r.webhook)?"updated":"check Alerts")); await loadCfg(); } else toast("The new token has not become active yet. Try signing in again in a minute."); } else if(r.error!=="demo") toast(r.error||"Failed"); }},"Change token")),
+    el("p",{class:"hint"},"If you ever lock yourself out, a developer can clear all dashboard-saved values with: npx wrangler kv key delete cfg --binding KV --remote"));
+}
+async function saveCfg(values){ const r=await post("/api/config",{values}); if(r.ok){ toast("Saved. Active within about a minute."+(r.webhook?" Telegram webhook updated.":"")); if(r.items){ S.cfg={items:r.items}; drawCfg(); } refresh(true); } else if(r.error!=="demo") toast(r.error||"Could not save"); }
+
+/* ---------- boot ---------- */
+render();
+setInterval(()=>{ if(!document.hidden&&(S.token||DEMO)&&S.page!=="settings") refresh(true); },180000);
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden&&S.data&&Date.now()-S.data.now>60000) refresh(true); });
+</script>
+</body>
+</html>
