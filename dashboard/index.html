@@ -113,8 +113,8 @@ const when = t => !t ? "–" : new Date(t).toLocaleString([], {month:"short",day
 function toast(m){ const t=el("div",{class:"toast"},m); document.body.append(t); setTimeout(()=>t.remove(),4200); }
 async function api(path, opts={}){
   if (DEMO){
-    if (path==="/api/state") return (await fetch("demo-state.json")).json();
-    if (path==="/api/config") return (await fetch("demo-config.json")).json();
+    if (path==="/api/state"||path==="/api/config"){ const r=await fetch(path==="/api/state"?"demo-state.json":"demo-config.json"); if(r.ok) return r.json();
+      toast("No demo data is published. Sign in to see your own data."); return path==="/api/state"?{now:Date.now(),jobs:[],stats:null,history:[],health:null,log:[],alerts:[],platforms:{},settings:{crons:{},autoPublishHours:0}}:{items:[]}; }
     toast("Demo mode: actions are disabled"); return {ok:false, error:"demo"};
   }
   const r = await fetch(S.api+path, {...opts, headers:{Authorization:"Bearer "+S.token, ...(opts.body&&!(opts.body instanceof ArrayBuffer||opts.body instanceof Blob)?{"content-type":"application/json"}:{}), ...(opts.headers||{})}});
