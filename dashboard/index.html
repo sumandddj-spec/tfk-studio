@@ -214,14 +214,37 @@ async function manualUpload(file,f,plats,btn,prog){
     const c=await post("/api/manual",{title,caption:f.caption.value,hashtags:f.hashtags.value,yt_title:f.yt_title.value,yt_description:f.yt_description.value});
     if(!c.ok) throw new Error(c.error||"could not create");
     S.active=c.id; sessionStorage.setItem("tfk_active",c.id); S.activeJob=null;
+    let body=fl; btn.textContent="Preparing…"; try{ body=await webOptimize(fl); if(body!==fl) toast("Prepared the file so Instagram can read it."); }catch{ body=fl; } btn.textContent="Uploading…";
     await new Promise((res,rej)=>{ const x=new XMLHttpRequest(); x.open("PUT",S.api+"/api/manual/"+c.id+"/video"); x.setRequestHeader("Authorization","Bearer "+S.token);
       x.upload.onprogress=e=>{ if(e.lengthComputable) bar.style.width=(e.loaded/e.total*100)+"%"; };
-      x.onload=()=>{ let j={}; try{j=JSON.parse(x.responseText)}catch{} x.status<300?res():rej(new Error(j.error||"upload failed ("+x.status+")")); }; x.onerror=()=>rej(new Error("network error")); x.send(fl); });
+      x.onload=()=>{ let j={}; try{j=JSON.parse(x.responseText)}catch{} x.status<300?res():rej(new Error(j.error||"upload failed ("+x.status+")")); }; x.onerror=()=>rej(new Error("network error")); x.send(body); });
     btn.textContent="Publishing…"; toast("Uploaded. Publishing now…"); startFast();
     const p=await post("/api/manual/"+c.id+"/publish",{platforms}); if(!p.ok) throw new Error(p.error||"publish failed");
     toast("Publishing finished. See the progress panel for each platform."); file.value=""; for(const k of ["title","caption","hashtags","yt_title","yt_description"]) f[k].value="";
   }catch(e){ toast("Upload problem: "+e.message); }
   btn.disabled=false; btn.textContent="Upload & publish"; prog.classList.add("hidden"); bar.style.width="0"; await refresh(true);
+}
+/* Moves the "moov" (index) box in front of the video data when it is at the end, so Instagram and other fetchers can read the file. No re-encoding. */
+async function webOptimize(file){
+  const buf=new Uint8Array(await file.arrayBuffer()), dv=new DataView(buf.buffer), tag=(o)=>String.fromCharCode(buf[o],buf[o+1],buf[o+2],buf[o+3]);
+  const boxes=[]; for(let o=0;o<buf.length;){
+    if(o+8>buf.length) return file; let size=dv.getUint32(o), hdr=8;
+    if(size===1){ if(o+16>buf.length) return file; size=Number(dv.getBigUint64(o+8)); hdr=16; } else if(size===0) size=buf.length-o;
+    if(size<hdr||o+size>buf.length) return file; boxes.push({t:tag(o+4),o,size,hdr}); o+=size;
+  }
+  const mi=boxes.findIndex(b=>b.t==="moov"), di=boxes.findIndex(b=>b.t==="mdat"), fi=boxes.findIndex(b=>b.t==="ftyp");
+  if(mi<0||di<0||fi<0||mi<di) return file; // already web-optimized (or not a plain MP4/MOV)
+  const mv=boxes[mi], moov=buf.slice(mv.o,mv.o+mv.size), mdv=new DataView(moov.buffer), shift=mv.size;
+  let patched=0;
+  const walk=(start,end)=>{ for(let o=start;o+8<=end;){
+    const size=mdv.getUint32(o); if(size<8||o+size>end) return; const t=String.fromCharCode(moov[o+4],moov[o+5],moov[o+6],moov[o+7]);
+    if(["trak","mdia","minf","stbl","edts"].includes(t)) walk(o+8,o+size);
+    else if(t==="stco"){ const n=mdv.getUint32(o+12); for(let i=0;i<n;i++){ const p=o+16+i*4; mdv.setUint32(p,mdv.getUint32(p)+shift); patched++; } }
+    else if(t==="co64"){ const n=mdv.getUint32(o+12); for(let i=0;i<n;i++){ const p=o+16+i*8; mdv.setBigUint64(p,mdv.getBigUint64(p)+BigInt(shift)); patched++; } }
+    o+=size; } };
+  walk(8,moov.length); if(!patched) return file;
+  const parts=[]; boxes.forEach((b,i)=>{ if(i===mi) return; parts.push(buf.subarray(b.o,b.o+b.size)); if(i===fi) parts.push(moov); });
+  return new Blob(parts,{type:file.type||"video/mp4"});
 }
 let fastTimer=null;
 function startFast(){ clearInterval(fastTimer); let n=0; fastTimer=setInterval(async()=>{ n++; await pollActive(); const st=S.activeJob?.status; if(n>400||(["published","failed","rejected"].includes(st))){ clearInterval(fastTimer); refresh(true); } if(st==="review"&&n%10===0) refresh(true); },3000); }
