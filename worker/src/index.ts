@@ -143,10 +143,10 @@ async function pubInstagram(env: Env, job: Job, url: string) {
   const c = await (await fetch(`https://graph.facebook.com/v21.0/${env.IG_USER_ID}/media`, { method: "POST",
     body: new URLSearchParams({ media_type: "REELS", video_url: url, caption: `${job.caption}\n${job.hashtags.map(h => "#" + String(h).replace(/^#/, "")).join(" ")}`, access_token: env.META_TOKEN }) })).json() as any;
   if (!c.id) throw new Error(JSON.stringify(c));
-  for (let i = 0; i < 8; i++) { // poll until container is processed
+  for (let i = 0; i < 12; i++) { // poll until container is processed (up to ~1 min)
     await new Promise(r => setTimeout(r, 5000));
-    const s = await (await fetch(`https://graph.facebook.com/v21.0/${c.id}?fields=status_code&access_token=${env.META_TOKEN}`)).json() as any;
-    if (s.status_code === "FINISHED") break; if (s.status_code === "ERROR") throw new Error("IG processing error");
+    const s = await (await fetch(`https://graph.facebook.com/v21.0/${c.id}?fields=status_code,status&access_token=${env.META_TOKEN}`)).json() as any;
+    if (s.status_code === "FINISHED") break; if (s.status_code === "ERROR") throw new Error("IG processing error: " + String(s.status || "no detail").slice(0, 200));
   }
   const p = await (await fetch(`https://graph.facebook.com/v21.0/${env.IG_USER_ID}/media_publish`, { method: "POST",
     body: new URLSearchParams({ creation_id: c.id, access_token: env.META_TOKEN }) })).json() as any;
