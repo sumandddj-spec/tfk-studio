@@ -50,3 +50,13 @@ Never commit secrets. This repository contains none.
 - Free-tier KV allows about 1,000 list operations per day: avoid leaving the dashboard open in many tabs.
 - YouTube uploads from unaudited API projects are private until Google audits the project.
 - Uploaded videos are limited to 20 MB (Telegram's limit when fetching by URL).
+
+## Extra languages
+
+Set `LANGS` (Settings page, e.g. `hi,bn,es`, max 4). For every automatic video the Worker then:
+- translates the script (Gemini, Llama fallback for hi/es/fr/pt/it) and stores it on the job;
+- the renderer records a dubbed audio file per language that has a Kokoro voice (hi, es, fr, pt, it, ja), each scene fitted to the English scene length;
+- on YouTube adds translated titles/descriptions and one subtitle track per language; on Facebook adds subtitle files;
+- sends you the audio files on Telegram with a link to YouTube Studio. Adding a file as a switchable **audio track** is a manual step in Studio (no API for it).
+
+Needs the `youtube.force-ssl` Google permission: re-run `tools/yt_auth.py` once. YouTube quota: about 2,850 units per video with 3 languages (10,000 per day). Instagram and Telegram stay English.

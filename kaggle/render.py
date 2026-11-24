@@ -109,7 +109,7 @@ def clip(query, out, seconds):
 
 KEYS = {w.strip(".,!?;:'\"").lower() for k in job.get("keywords") or [] for w in str(k).split()}
 HOOK = (job.get("hook") or job.get("title") or "").upper()
-segs, ass, t0 = [], [], 0.0
+segs, ass, t0, durs, timings = [], [], 0.0, [], []
 for i, sc in enumerate(job["scenes"]):
     a, sub, v = f"w/a{i}.audio", f"w/s{i}.json", f"w/v{i}.mp4"
     asyncio.run(tts(sc["narration"], a, sub)); d = dur(a) + 0.3
@@ -123,6 +123,7 @@ for i, sc in enumerate(job["scenes"]):
         g = words[k:k+3]
         txt = " ".join(("{\\c&H00E0FF&}" + x[2].upper() + "{\\r}") if x[2].strip(".,!?;:'\"").lower() in KEYS else x[2].upper() for x in g)
         ass.append(f"Dialogue: 0,{fmt(t0+g[0][0])},{fmt(t0+g[-1][1]+0.1)},C,,0,0,0,,{txt}")
+    durs.append(d); timings.append([round(t0, 2), round(t0 + d, 2)])
     t0 += d
 open("w/subs.ass","w").write(f"""[Script Info]
 PlayResX: {W}
@@ -141,4 +142,25 @@ print("size MB", os.path.getsize("out.mp4")/1e6)
 progress("upload", 0, 0, "Uploading video")
 requests.put(f"{WORKER}/upload/{job['id']}", headers=H, data=open("out.mp4","rb")).raise_for_status()
 print("uploaded", job["id"])
+
+def dub_track(lang, cfg, narrs):  # one dubbed audio file per language, each scene fitted to the English scene length
+    import soundfile as sf
+    parts = []
+    for i, (txt, d) in enumerate(zip(narrs, durs)):
+        wav, out = f"w/d_{lang}_{i}.wav", f"w/dp_{lang}_{i}.wav"
+        audio, sr = KOKORO.create(txt, voice=cfg["voice"], speed=0.9, lang=cfg["lang"]); sf.write(wav, audio, sr, format="WAV")
+        r = dur(wav) / max(d - 0.2, 0.5); af = (f"atempo={min(r, 1.6):.3f}," if r > 1.0 else "") + f"apad=whole_dur={d:.3f}"
+        sh("ffmpeg", "-y", "-i", wav, "-af", af, "-t", f"{d:.3f}", "-ar", "44100", "-ac", "1", out); parts.append(out)
+    open(f"w/dl_{lang}.txt", "w").write("".join(f"file '{os.path.abspath(p)}'\n" for p in parts))
+    m4a = f"w/dub_{lang}.m4a"; sh("ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", f"w/dl_{lang}.txt", "-c:a", "aac", "-b:a", "96k", m4a); return m4a
+try: requests.post(f"{WORKER}/upload/{job['id']}/meta", headers=H, json={"timings": timings}, timeout=30)
+except Exception as e: print("timings upload failed", repr(e)[:120])
+for lang, cfg in (job.get("dubs") or {}).items():  # failures here never block the main video
+    if KOKORO is None: print("no kokoro, skipping dubs"); break
+    try:
+        progress("assemble", len(job["scenes"]), len(job["scenes"]), f"Recording {lang} audio")
+        m4a = dub_track(lang, cfg, job["tr"][lang]["narrations"])
+        requests.put(f"{WORKER}/upload/{job['id']}/audio/{lang}", headers=H, data=open(m4a, "rb"), timeout=120).raise_for_status(); print("dub uploaded", lang)
+    except Exception as e:
+        print("dub failed", lang, repr(e)[:300]); progress("assemble", len(job["scenes"]), len(job["scenes"]), f"{lang} audio skipped: {repr(e)[:80]}")
 x = requests.post(f"{WORKER}/publish/{job['id']}/review", headers=H, timeout=120); print("review", x.status_code, x.text[:200])

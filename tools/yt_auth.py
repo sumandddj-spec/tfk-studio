@@ -10,7 +10,7 @@ YT_REFRESH_TOKEN as Cloudflare Worker secrets. Nothing secret is printed.
 """
 import getpass, http.server, json, secrets, subprocess, sys, threading, urllib.parse, urllib.request, webbrowser
 
-SCOPE = "https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly"  # upload + read view/like/comment counts
+SCOPE = "https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.force-ssl"  # upload + read stats + translated titles/subtitles
 client_id = input("OAuth client ID: ").strip()
 client_secret = getpass.getpass("OAuth client secret (hidden): ").strip()
 

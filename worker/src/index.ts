@@ -1,19 +1,20 @@
 // @ts-ignore bundled as text via wrangler [[rules]]
 import RENDER_PY from "../../kaggle/render.py";
+import { buildSrt } from "./srt";
 
 interface Env {
   KV: KVNamespace; AI: any;
   NICHE: string; KAGGLE_USERNAME: string; KAGGLE_KERNEL_SLUG: string; WORKER_URL: string;
   IG_USER_ID: string; FB_PAGE_ID: string; TG_CHAT_ID: string; TG_ADMIN_ID: string;
   GEMINI_API_KEY: string; KAGGLE_KEY: string; JOB_TOKEN: string; TG_BOT_TOKEN: string;
-  META_TOKEN: string; YT_CLIENT_ID: string; YT_CLIENT_SECRET: string; YT_REFRESH_TOKEN: string;
+  LANGS?: string; META_TOKEN: string; YT_CLIENT_ID: string; YT_CLIENT_SECRET: string; YT_REFRESH_TOKEN: string;
 }
-type Job = { id: string; source?: string; topic?: string; genAt?: number; tries?: number; events?: { t: number; m: string }[]; progress?: { step: string; done: number; total: number; t: number }; status: "writing" | "uploading" | "pending" | "rendering" | "review" | "publishing" | "rejected" | "published" | "failed"; title: string;
+type Job = { id: string; source?: string; tr?: Record<string, { title: string; hook: string; caption: string; narrations: string[] }>; dubs?: Record<string, { lang: string; voice: string }>; timings?: number[][]; audioLangs?: string[]; i18n?: Record<string, string>; dubsSent?: boolean; topic?: string; genAt?: number; tries?: number; events?: { t: number; m: string }[]; progress?: { step: string; done: number; total: number; t: number }; status: "writing" | "uploading" | "pending" | "rendering" | "review" | "publishing" | "rejected" | "published" | "failed"; title: string;
   createdAt?: number; claimedAt?: number; attempts?: number; caption: string; hashtags: string[]; hook?: string; gen?: string; words?: number; keywords?: string[]; yt_title?: string; yt_description?: string; scenes: { narration: string; visual_query: string }[]; results?: Record<string, string> };
 
 
 // ---------- 0. Shared helpers: config overrides, job storage, events, log ----------
-const CFG_KEYS = ["JOB_TOKEN", "GEMINI_API_KEY", "KAGGLE_KEY", "KAGGLE_USERNAME", "TG_BOT_TOKEN", "TG_CHAT_ID", "TG_ADMIN_ID", "META_TOKEN", "FB_PAGE_ID", "IG_USER_ID", "YT_CLIENT_ID", "YT_CLIENT_SECRET", "YT_REFRESH_TOKEN", "AUTO_PUBLISH_HOURS", "NICHE"];
+const CFG_KEYS = ["JOB_TOKEN", "GEMINI_API_KEY", "KAGGLE_KEY", "KAGGLE_USERNAME", "TG_BOT_TOKEN", "TG_CHAT_ID", "TG_ADMIN_ID", "META_TOKEN", "FB_PAGE_ID", "IG_USER_ID", "YT_CLIENT_ID", "YT_CLIENT_SECRET", "YT_REFRESH_TOKEN", "AUTO_PUBLISH_HOURS", "NICHE", "LANGS"];
 const SECRET_CFG = new Set(["JOB_TOKEN", "GEMINI_API_KEY", "KAGGLE_KEY", "TG_BOT_TOKEN", "META_TOKEN", "YT_CLIENT_SECRET", "YT_REFRESH_TOKEN"]);
 async function applyCfg(env: Env): Promise<Env> {
   try {
@@ -85,6 +86,54 @@ Return ONLY JSON: {"topic":"","title":"<=70 chars","hook":"2-4 word on-screen ti
   return { id: crypto.randomUUID().slice(0, 8), createdAt: Date.now(), attempts: 0, status: "pending", source: "auto", events: [{ t: Date.now(), m: `Script written (${wc(j)} words, ${(j.scenes || []).length} scenes, ${gen.slice(0, 20)})` }], gen, words: wc(j), title: j.title, hook: String(j.hook || "").slice(0, 40) || undefined, keywords: Array.isArray(j.keywords) ? j.keywords.map(String).slice(0, 8) : [], yt_title: j.yt_title, yt_description: j.yt_description, caption: j.caption, hashtags: j.hashtags, scenes: j.scenes };
 }
 
+// ---------- 1b. Extra languages: translated titles/subtitles and dubbed audio files ----------
+// kokoro = voice for the dubbed audio file (languages without one get titles + subtitles only). fb = Facebook caption locale.
+const LANG: Record<string, { name: string; fb: string; kokoro?: { lang: string; voice: string } }> = {
+  hi: { name: "Hindi", fb: "hi_IN", kokoro: { lang: "hi", voice: "hf_alpha" } },
+  bn: { name: "Bengali", fb: "bn_IN" },
+  es: { name: "Spanish", fb: "es_LA", kokoro: { lang: "es", voice: "ef_dora" } },
+  fr: { name: "French", fb: "fr_FR", kokoro: { lang: "fr-fr", voice: "ff_siwis" } },
+  pt: { name: "Portuguese", fb: "pt_BR", kokoro: { lang: "pt-br", voice: "pf_dora" } },
+  it: { name: "Italian", fb: "it_IT", kokoro: { lang: "it", voice: "if_sara" } },
+  ja: { name: "Japanese", fb: "ja_JP", kokoro: { lang: "ja", voice: "jf_alpha" } },
+  ta: { name: "Tamil", fb: "ta_IN" }, te: { name: "Telugu", fb: "te_IN" }, mr: { name: "Marathi", fb: "mr_IN" },
+  ar: { name: "Arabic", fb: "ar_AR" }, id: { name: "Indonesian", fb: "id_ID" },
+};
+const LLAMA_LANGS = ["hi", "es", "fr", "pt", "it"]; // languages the free Llama fallback can translate
+const chosenLangs = (env: Env) => String(env.LANGS ?? "").split(/[\s,]+/).map(x => x.trim().toLowerCase()).filter((x, i, a) => LANG[x] && a.indexOf(x) === i).slice(0, 4);
+const hashtagLine = (job: Job) => job.hashtags.map(h => "#" + String(h).replace(/^#/, "")).join(" ");
+
+async function geminiText(env: Env, prompt: string, ms = 45000): Promise<string> {
+  const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent", {
+    method: "POST", headers: { "x-goog-api-key": env.GEMINI_API_KEY, "content-type": "application/json" },
+    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json", temperature: 0.4, thinkingConfig: { thinkingLevel: "low" } } }),
+    signal: AbortSignal.timeout(ms) });
+  if (!r.ok) throw new Error(`Gemini ${r.status}`);
+  return ((await r.json()) as any).candidates[0].content.parts[0].text as string;
+}
+const jsonOf = (t: string) => JSON.parse(t.slice(t.indexOf("{"), t.lastIndexOf("}") + 1));
+
+// Translates title, hook, caption and every narration. Never throws: a failure just means no extra languages for this video.
+async function translateJob(env: Env, job: Job): Promise<void> {
+  const langs = chosenLangs(env); if (!langs.length || !job.scenes?.length) return;
+  const n = job.scenes.length, src = { title: job.title, hook: job.hook || "", caption: job.caption, narrations: job.scenes.map(x => x.narration) };
+  const okTr = (x: any) => x && typeof x.title === "string" && Array.isArray(x.narrations) && x.narrations.length === n && x.narrations.every((t: any) => typeof t === "string" && t.trim());
+  const clean = (x: any) => ({ title: String(x.title).slice(0, 90), hook: String(x.hook || "").slice(0, 40), caption: String(x.caption || "").slice(0, 400), narrations: x.narrations.map((t: any) => String(t)) });
+  const ask = (codes: string[]) => `Translate this children's (ages 5-9) video script from English into: ${codes.map(l => `${l} (${LANG[l].name})`).join(", ")}. Keep the same warm spoken tone and keep each narration about the same length as the English one, because it must fit the same time. Keep exactly ${n} narrations in the same order. The hook has plain letters only, no emoji. Return ONLY JSON shaped {"<code>":{"title":"","hook":"","caption":"","narrations":[""]}} with one entry per code.\nSOURCE: ${JSON.stringify(src)}`;
+  const out: Record<string, { title: string; hook: string; caption: string; narrations: string[] }> = {};
+  try { const j = jsonOf(await geminiText(env, ask(langs), 60000)); for (const l of langs) if (okTr(j[l])) out[l] = clean(j[l]); }
+  catch (e: any) { ev(job, "Gemini translation failed: " + String(e.message).slice(0, 100)); }
+  for (const l of langs.filter(x => !out[x] && LLAMA_LANGS.includes(x))) {
+    try {
+      const o = await env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", { messages: [{ role: "user", content: ask([l]) }], max_tokens: 2800 });
+      const j = jsonOf(String(o.choices?.[0]?.message?.content ?? o.response ?? "")); if (okTr(j[l])) out[l] = clean(j[l]);
+    } catch (e: any) { ev(job, `Llama translation to ${l} failed: ` + String(e.message).slice(0, 80)); }
+  }
+  const got = Object.keys(out); if (!got.length) { ev(job, "No translations this time"); return; }
+  job.tr = out; job.dubs = Object.fromEntries(got.filter(l => LANG[l].kokoro).map(l => [l, LANG[l].kokoro!]));
+  ev(job, `Translated to ${got.map(l => LANG[l].name).join(", ")}; audio files for ${Object.keys(job.dubs).map(l => LANG[l].name).join(", ") || "none"}`);
+}
+
 // ---------- 2. Trigger Kaggle kernel (re-push = new run) ----------
 async function pushKaggle(env: Env) {
   const runTok = "rt_" + crypto.randomUUID().replace(/-/g, "");
@@ -104,6 +153,7 @@ async function pushKaggle(env: Env) {
 
 async function startPipeline(env: Env, stub?: Job, topic?: string) {
   const job = await generateJob(env, topic);
+  await translateJob(env, job).catch(e => ev(job, "Translation skipped: " + String(e.message).slice(0, 100)));
   if (stub) { job.id = stub.id; job.createdAt = stub.createdAt; job.events = [...(stub.events || []), ...(job.events || [])]; }
   ev(job, "Queued for rendering");
   await saveJob(env, job);
@@ -137,7 +187,20 @@ async function pubTelegram(env: Env, job: Job, url: string) {
 async function pubFacebook(env: Env, job: Job, url: string) {
   const r = await fetch(`https://graph.facebook.com/v21.0/${env.FB_PAGE_ID}/videos`, { method: "POST",
     body: new URLSearchParams({ file_url: url, title: job.title, description: `${job.caption}\n${job.hashtags.map(h => "#" + String(h).replace(/^#/, "")).join(" ")}`, access_token: env.META_TOKEN }) });
-  const j = (await r.json()) as any; if (!r.ok) throw new Error(JSON.stringify(j)); return j.id;
+  const j = (await r.json()) as any; if (!r.ok) throw new Error(JSON.stringify(j));
+  try { job.i18n = { ...(job.i18n || {}), facebook: await fbCaptions(env, job, j.id) }; } catch (e: any) { job.i18n = { ...(job.i18n || {}), facebook: "ERR:" + String(e.message).slice(0, 200) }; }
+  return j.id;
+}
+async function fbCaptions(env: Env, job: Job, id: string): Promise<string> {
+  const langs = Object.keys(job.tr || {}).filter(l => LANG[l]); if (!langs.length || !job.timings?.length) return "none";
+  await new Promise(r => setTimeout(r, 8000)); // let Facebook register the video first
+  const done: string[] = [], errs: string[] = [];
+  for (const l of langs) {
+    const fd = new FormData(); fd.append("captions_file", new Blob([buildSrt(job.tr![l].narrations, job.timings)], { type: "text/plain" }), `captions.${LANG[l].fb}.srt`); fd.append("access_token", env.META_TOKEN);
+    const r = await fetch(`https://graph.facebook.com/v21.0/${id}/captions`, { method: "POST", body: fd });
+    if (r.ok) done.push(l); else errs.push(`${l} ${r.status}: ${(await r.text()).slice(0, 100)}`);
+  }
+  return done.length ? `ok:subtitles ${done.join(",")}` + (errs.length ? `; errors: ${errs[0]}` : "") : "ERR:" + errs[0];
 }
 async function pubInstagram(env: Env, job: Job, url: string) {
   const c = await (await fetch(`https://graph.facebook.com/v21.0/${env.IG_USER_ID}/media`, { method: "POST",
@@ -152,16 +215,40 @@ async function pubInstagram(env: Env, job: Job, url: string) {
     body: new URLSearchParams({ creation_id: c.id, access_token: env.META_TOKEN }) })).json() as any;
   if (!p.id) throw new Error(JSON.stringify(p)); return p.id;
 }
+const ytMeta = (job: Job) => ({
+  title: `${(job.yt_title || job.title).slice(0, 88)} #Shorts`.slice(0, 100),
+  description: `${job.yt_description || job.caption}\n\n${job.caption}\n\n${hashtagLine(job)} #Shorts` });
+// Adds translated titles/descriptions and subtitle tracks. Needs the youtube.force-ssl permission (re-run tools/yt_auth.py once).
+async function ytI18n(env: Env, job: Job, token: string, vid: string): Promise<string> {
+  const langs = Object.keys(job.tr || {}).filter(l => LANG[l]); if (!langs.length) return "none";
+  const m = ytMeta(job), auth = { Authorization: `Bearer ${token}` };
+  const localizations = Object.fromEntries(langs.map(l => [l, { title: `${job.tr![l].title.slice(0, 88)} #Shorts`.slice(0, 100), description: `${job.tr![l].caption}\n\n${hashtagLine(job)} #Shorts`.slice(0, 4500) }]));
+  const r = await fetch("https://www.googleapis.com/youtube/v3/videos?part=snippet,localizations", { method: "PUT", headers: { ...auth, "content-type": "application/json" },
+    body: JSON.stringify({ id: vid, snippet: { title: m.title, description: m.description, categoryId: "27", defaultLanguage: "en" }, localizations }) });
+  if (!r.ok) { const t = await r.text(); throw new Error(/insufficient|scope|403/i.test(t + r.status) ? "needs YouTube re-authorisation (run tools/yt_auth.py once): " + t.slice(0, 120) : `titles ${r.status}: ${t.slice(0, 140)}`); }
+  const done: string[] = [], errs: string[] = [];
+  if (job.timings?.length) for (const l of langs) {
+    try {
+      const b = "tfk" + crypto.randomUUID().replace(/-/g, "");
+      const body = `--${b}\r\ncontent-type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ snippet: { videoId: vid, language: l, name: LANG[l].name, isDraft: false } })}\r\n--${b}\r\ncontent-type: application/octet-stream\r\n\r\n${buildSrt(job.tr![l].narrations, job.timings)}\r\n--${b}--`;
+      const c = await fetch("https://www.googleapis.com/upload/youtube/v3/captions?uploadType=multipart&part=snippet", { method: "POST", headers: { ...auth, "content-type": `multipart/related; boundary=${b}` }, body });
+      if (c.ok) done.push(l); else errs.push(`${l} ${c.status}: ${(await c.text()).slice(0, 100)}`);
+    } catch (e: any) { errs.push(`${l}: ${String(e.message).slice(0, 80)}`); }
+  }
+  return `ok:titles ${langs.join(",")}; subtitles ${done.join(",") || "none"}` + (errs.length ? `; subtitle errors: ${errs[0]}` : "");
+}
 async function pubYouTube(env: Env, job: Job, _url: string) {
   const t = await (await fetch("https://oauth2.googleapis.com/token", { method: "POST",
     body: new URLSearchParams({ client_id: env.YT_CLIENT_ID, client_secret: env.YT_CLIENT_SECRET, refresh_token: env.YT_REFRESH_TOKEN, grant_type: "refresh_token" }) })).json() as any;
   const obj = await env.KV.get(`video:${job.id}`, "arrayBuffer"); if (!obj) throw new Error("video missing");
   const init = await fetch("https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status", {
     method: "POST", headers: { Authorization: `Bearer ${t.access_token}`, "content-type": "application/json", "X-Upload-Content-Type": "video/mp4" },
-    body: JSON.stringify({ snippet: { title: `${(job.yt_title || job.title).slice(0, 88)} #Shorts`.slice(0, 100), description: `${job.yt_description || job.caption}\n\n${job.caption}\n\n${job.hashtags.map(h => "#" + String(h).replace(/^#/, "")).join(" ")} #Shorts`, categoryId: "27" }, status: { privacyStatus: "public", selfDeclaredMadeForKids: true } }) });
+    body: JSON.stringify({ snippet: { ...ytMeta(job), categoryId: "27", defaultLanguage: "en", defaultAudioLanguage: "en" }, status: { privacyStatus: "public", selfDeclaredMadeForKids: true } }) });
   const loc = init.headers.get("location"); if (!loc) throw new Error(await init.text());
   const up = await fetch(loc, { method: "PUT", headers: { "content-type": "video/mp4", "content-length": String(obj.byteLength) }, body: obj });
-  const j = (await up.json()) as any; if (!up.ok) throw new Error(JSON.stringify(j)); return j.id;
+  const j = (await up.json()) as any; if (!up.ok) throw new Error(JSON.stringify(j));
+  try { job.i18n = { ...(job.i18n || {}), youtube: await ytI18n(env, job, t.access_token, j.id) }; } catch (e: any) { job.i18n = { ...(job.i18n || {}), youtube: "ERR:" + String(e.message).slice(0, 200) }; }
+  return j.id;
 }
 
 async function publishOne(env: Env, job: Job, platform: string) {
@@ -204,6 +291,19 @@ async function approveAndPublish(env: Env, job: Job, platforms?: string[]) {
   job.status = "published"; ev(job, "Done"); await saveJob(env, job);
   const bad = Object.values(job.results || {}).some(v => String(v).startsWith("ERR"));
   await notifyAdmin(env, `Published "${job.title}"\n` + Object.entries(job.results || {}).map(([k, v]) => `${k}: ${v}`).join("\n") + (skipped.length ? `\nnot configured: ${skipped.join(", ")}` : ""), {}, bad ? "error" : "info");
+  await sendDubs(env, job).catch(() => {});
+}
+
+// Sends you the dubbed audio files and the steps to add them as switchable audio in YouTube Studio (that step cannot be automated).
+async function sendDubs(env: Env, job: Job) {
+  if (!env.TG_ADMIN_ID || job.dubsSent) return;
+  const langs = (job.audioLangs || []).filter(l => LANG[l]); if (!langs.length && !job.i18n) return;
+  const yt = String(job.results?.youtube || ""), vid = yt.startsWith("ok:") ? yt.slice(3) : "";
+  job.dubsSent = true; await saveJob(env, job);
+  const lines = [`\u{1F310} Languages for "${job.title}"`, `YouTube titles/subtitles: ${job.i18n?.youtube || "n/a"}`, `Facebook subtitles: ${job.i18n?.facebook || "n/a"}`];
+  if (langs.length) lines.push("", "Audio files follow. To add each as a switchable audio language:", `YouTube Studio > ${vid ? `https://studio.youtube.com/video/${vid}/translations` : "your video > Subtitles"} > Add language (if not listed) > Audio > upload the file.`);
+  await notifyAdmin(env, lines.join("\n"));
+  for (const l of langs) await tg(env, "sendAudio", { chat_id: env.TG_ADMIN_ID, audio: `${env.WORKER_URL}/a/${job.id}.${l}.m4a`, title: `${LANG[l].name} audio`, caption: `${LANG[l].name} audio for "${job.title}"` }).catch(() => {});
 }
 
 async function handleTelegramUpdate(env: Env, upd: any) {
@@ -347,7 +447,7 @@ async function collectStats(env: Env) {
 // ---------- 5. Dashboard API ----------
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization, content-type", "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS", "access-control-max-age": "86400" };
 const jr = (o: any, status = 200) => Response.json(o, { status, headers: CORS });
-const brief = (j: Job) => ({ id: j.id, title: j.title, status: j.status, source: j.source || "auto", createdAt: j.createdAt, words: j.words ?? wc(j), scenes: j.scenes?.length || 0, gen: j.gen, hook: j.hook, caption: j.caption, hashtags: j.hashtags, results: j.results || {}, progress: j.progress, events: (j.events || []).slice(-14) });
+const brief = (j: Job) => ({ id: j.id, title: j.title, status: j.status, source: j.source || "auto", createdAt: j.createdAt, words: j.words ?? wc(j), scenes: j.scenes?.length || 0, gen: j.gen, hook: j.hook, caption: j.caption, hashtags: j.hashtags, results: j.results || {}, langs: Object.keys(j.tr || {}), audioLangs: j.audioLangs || [], i18n: j.i18n || {}, progress: j.progress, events: (j.events || []).slice(-14) });
 
 function computeAlerts(env: Env, jobs: Job[], health: any, stats: any, dismissed: string[]) {
   const A: any[] = [], now = Date.now();
@@ -480,7 +580,7 @@ async function handleApi(req: Request, env: Env, ctx: ExecutionContext, u: URL, 
 }
 
 // ---------- 6. HTTP (Kaggle <-> Worker, dashboard) + cron ----------
-const RUN_PATHS = /^\/(job\/next|image|upload\/\w+|fail\/\w+|progress\/\w+|publish\/\w+\/review)$/;
+const RUN_PATHS = /^\/(job\/next|image|upload\/\w+(\/meta|\/audio\/\w+)?|fail\/\w+|progress\/\w+|publish\/\w+\/review)$/;
 async function authLevel(req: Request, env: Env, path: string): Promise<"admin" | "run" | null> {
   const b = (req.headers.get("authorization") || "").replace(/^Bearer /, "");
   if (env.JOB_TOKEN && b === env.JOB_TOKEN) return "admin";
@@ -510,6 +610,8 @@ export default {
     }
     const v = u.pathname.match(/^\/v\/(\w+)\.mp4$/);
     if (v) { const b = await env.KV.get(`video:${v[1]}`, "arrayBuffer"); return b ? new Response(b, { headers: { "content-type": "video/mp4", "content-length": String(b.byteLength) } }) : new Response("gone", { status: 404 }); }
+    const au = u.pathname.match(/^\/a\/(\w+)\.(\w+)\.m4a$/);
+    if (au) { const b = await env.KV.get(`audio:${au[1]}:${au[2]}`, "arrayBuffer"); return b ? new Response(b, { headers: { "content-type": "audio/mp4", "content-length": String(b.byteLength) } }) : new Response("gone", { status: 404 }); }
     if (u.pathname === "/tg" && req.method === "POST") {
       if (!env.JOB_TOKEN || req.headers.get("x-telegram-bot-api-secret-token") !== env.JOB_TOKEN) return new Response("forbidden", { status: 403 });
       try { await handleTelegramUpdate(env, await req.json()); } catch (e) { console.log("tg update error", String(e)); }
@@ -552,6 +654,16 @@ export default {
       const job = JSON.parse((await env.KV.get(`job:${pg[1]}`)) || "null") as Job | null; if (!job) return new Response("no job", { status: 404 });
       const b = (await req.json()) as any; job.progress = { step: String(b.step || ""), done: Number(b.done) || 0, total: Number(b.total) || 0, t: Date.now() };
       if (b.msg) ev(job, String(b.msg)); await saveJob(env, job); return new Response("ok");
+    }
+    const um = u.pathname.match(/^\/upload\/(\w+)\/(meta|audio\/(\w+))$/);
+    if (um) {
+      const job = JSON.parse((await env.KV.get(`job:${um[1]}`)) || "null") as Job | null; if (!job) return new Response("no job", { status: 404 });
+      if (um[2] === "meta" && req.method === "POST") { const b = (await req.json().catch(() => ({}))) as any; if (Array.isArray(b.timings)) job.timings = b.timings.slice(0, 40).map((t: any) => [Number(t?.[0]) || 0, Number(t?.[1]) || 0]); await saveJob(env, job); return new Response("ok"); }
+      if (um[3] && req.method === "PUT" && LANG[um[3]]) {
+        await env.KV.put(`audio:${um[1]}:${um[3]}`, await req.arrayBuffer(), { expirationTtl: 86400 * 14 });
+        job.audioLangs = [...new Set([...(job.audioLangs || []), um[3]])]; ev(job, `${LANG[um[3]].name} audio file ready`); await saveJob(env, job); return new Response("ok");
+      }
+      return new Response("bad request", { status: 400 });
     }
     const m = u.pathname.match(/^\/upload\/(\w+)$/);
     if (m && req.method === "PUT") {

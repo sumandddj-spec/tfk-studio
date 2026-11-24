@@ -18,6 +18,7 @@ type = "Text"
 globs = ["**/*.py"]
 
 [vars]
+LANGS = "hi,bn,es"
 NICHE = "fun science, animals, space and nature facts for kids"
 KAGGLE_USERNAME = "ssumandey"
 KAGGLE_KERNEL_SLUG = "faceless-renderer"

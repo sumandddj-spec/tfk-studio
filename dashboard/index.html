@@ -255,6 +255,16 @@ function drawKpis(){
   const fol=Object.values(d.stats?.channel||{}).reduce((n,x)=>n+(x.followers||0),0), live=d.jobs.filter(j=>["writing","pending","rendering","review","publishing","uploading"].includes(j.status)).length;
   k.replaceChildren(...[["Published",pub.length],["In progress",live],["Views",v],["Likes",l],["Comments",c],["Followers",fol]].map(([n,val])=>el("div",{class:"kpi"},el("b",{},fmt(val)),el("span",{},n))));
 }
+const LNAME={hi:"Hindi",bn:"Bengali",es:"Spanish",fr:"French",pt:"Portuguese",it:"Italian",ja:"Japanese",ta:"Tamil",te:"Telugu",mr:"Marathi",ar:"Arabic",id:"Indonesian"};
+function langBox(j){
+  const yt=String(j.results?.youtube||""), vid=yt.startsWith("ok:")?yt.slice(3):"", ok=x=>String(x||"").startsWith("ok:");
+  const files=(j.audioLangs||[]).map(l=>el("a",{href:S.api+"/a/"+j.id+"."+l+".m4a",target:"_blank",rel:"noopener",style:"margin-right:10px"},(LNAME[l]||l)+" audio"));
+  return el("div",{class:"hint",style:"margin-top:10px;line-height:1.6"},
+    el("b",{},"Languages: "),(j.langs||[]).map(l=>(LNAME[l]||l)+((j.audioLangs||[]).includes(l)?"":" (subtitles only)")).join(", "),el("br"),
+    "YouTube titles/subtitles: "+(j.i18n?.youtube?(ok(j.i18n.youtube)?"done":"needs attention"):"pending"),", Facebook subtitles: "+(j.i18n?.facebook?(ok(j.i18n.facebook)?"done":"not added"):"pending"),
+    files.length?el("div",{},"Audio files: ",files):null,
+    files.length&&vid?el("div",{},"Add them in ",el("a",{href:"https://studio.youtube.com/video/"+vid+"/translations",target:"_blank",rel:"noopener"},"YouTube Studio > Subtitles")," (Add language > Audio)."):null);
+}
 function platChips(j){
   return el("div",{class:"chips"},...Object.keys(PLAT).filter(p=>j.results?.[p]).map(p=>{ const r=j.results[p],ok=String(r).startsWith("ok:"); const link=jobViews(j).st[p]?.link;
     return el(link?"a":"span",{class:"chip "+(ok?"ok":"bad"),title:ok?"Published":r,...(link?{href:link,target:"_blank",rel:"noopener"}:{})},ok?"✓":"✗",PLAT[p].n); }));
@@ -284,6 +294,7 @@ function drawProgress(){
     acts.length?el("div",{class:"row",style:"margin-top:10px"},acts):null,
     hasVid&&!DEMO&&["review","publishing","published"].includes(j.status)?el("video",{controls:true,preload:"metadata",src:S.api+"/v/"+j.id+".mp4"}):null,
     j.status==="published"?el("div",{style:"margin-top:10px"},platChips(j)):null,
+    (j.langs&&j.langs.length)?langBox(j):null,
     j.caption?el("p",{class:"hint",style:"margin-top:10px"},j.caption+" "+(j.hashtags||[]).map(h=>"#"+String(h).replace(/^#/,"")).join(" ")):null,
     el("div",{class:"ev"},evs.length?evs.map(e=>el("div",{},el("time",{},clock(e.t)),el("span",{},e.m))):el("div",{class:"hint"},"No events yet.")));
 }
@@ -368,8 +379,9 @@ const GROUPS=[
  {t:"Telegram",test:"telegram",hint:"Bot token from BotFather, the channel handle, and your own numeric user ID for reviews.",keys:["TG_BOT_TOKEN","TG_CHAT_ID","TG_ADMIN_ID"]},
  {t:"Script writer (Gemini)",test:"gemini",keys:["GEMINI_API_KEY"]},
  {t:"Video renderer (Kaggle)",test:"kaggle",keys:["KAGGLE_USERNAME","KAGGLE_KEY"]},
+ {t:"Languages",keys:["LANGS"],hint:"Extra languages, comma separated, up to 4. Each gets translated titles and subtitles, plus a downloadable audio file where a voice exists. Codes: hi Hindi, bn Bengali, es Spanish, fr French, pt Portuguese, it Italian, ja Japanese, ta Tamil, te Telugu, mr Marathi, ar Arabic, id Indonesian. Bengali, Tamil, Telugu, Marathi, Arabic and Indonesian have no voice yet (subtitles only)."},
  {t:"Behaviour",keys:["AUTO_PUBLISH_HOURS","NICHE"],hint:"Auto-publish hours: how long a video may wait for your decision (0 = never auto-publish)."}];
-const LABEL={YT_CLIENT_ID:"Client ID",YT_CLIENT_SECRET:"Client secret",YT_REFRESH_TOKEN:"Refresh token",META_TOKEN:"Page access token",FB_PAGE_ID:"Facebook Page ID",IG_USER_ID:"Instagram account ID",TG_BOT_TOKEN:"Bot token",TG_CHAT_ID:"Channel (e.g. @name)",TG_ADMIN_ID:"Your Telegram user ID",GEMINI_API_KEY:"Gemini API key",KAGGLE_USERNAME:"Kaggle username",KAGGLE_KEY:"Kaggle API key",AUTO_PUBLISH_HOURS:"Auto-publish after (hours)",NICHE:"Topic area",JOB_TOKEN:"Admin token"};
+const LABEL={YT_CLIENT_ID:"Client ID",YT_CLIENT_SECRET:"Client secret",YT_REFRESH_TOKEN:"Refresh token",META_TOKEN:"Page access token",FB_PAGE_ID:"Facebook Page ID",IG_USER_ID:"Instagram account ID",TG_BOT_TOKEN:"Bot token",TG_CHAT_ID:"Channel (e.g. @name)",TG_ADMIN_ID:"Your Telegram user ID",GEMINI_API_KEY:"Gemini API key",KAGGLE_USERNAME:"Kaggle username",KAGGLE_KEY:"Kaggle API key",AUTO_PUBLISH_HOURS:"Auto-publish after (hours)",NICHE:"Topic area",LANGS:"Extra languages (codes)",JOB_TOKEN:"Admin token"};
 function settingsView(){ return el("div",{style:"max-width:820px"},el("section",{class:"card"},el("h2",{},"Connections and keys"),el("p",{class:"sub"},"Changes are saved at once and become active everywhere within about a minute. Leave a field empty to keep the current value. Secrets are never shown in full after saving."),el("div",{id:"cfgBox"},el("div",{class:"empty"},"Loading…")))); }
 async function loadCfg(){ S.cfg=await api("/api/config"); drawCfg(); }
 function drawCfg(){
