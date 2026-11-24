@@ -197,10 +197,10 @@ async function approveAndPublish(env: Env, job: Job, platforms?: string[]) {
   const list = platforms?.length ? platforms : ["telegram", "youtube", "facebook", "instagram"];
   job.status = "publishing"; ev(job, "Publishing to " + list.join(", ")); await saveJob(env, job);
   const skipped: string[] = [];
-  for (const pf of list) {
-    if (!configured(env, pf)) { skipped.push(pf); continue; }
+  const todo = list.filter(pf => configured(env, pf) || (skipped.push(pf), false));
+  await Promise.all(todo.map(async pf => { // all platforms at once: the slowest (Instagram) no longer delays the others past the Worker time limit
     await publishOne(env, job, pf); ev(job, `${pf}: ${job.results?.[pf]}`); await saveJob(env, job);
-  }
+  }));
   job.status = "published"; ev(job, "Done"); await saveJob(env, job);
   const bad = Object.values(job.results || {}).some(v => String(v).startsWith("ERR"));
   await notifyAdmin(env, `Published "${job.title}"\n` + Object.entries(job.results || {}).map(([k, v]) => `${k}: ${v}`).join("\n") + (skipped.length ? `\nnot configured: ${skipped.join(", ")}` : ""), {}, bad ? "error" : "info");
@@ -424,7 +424,7 @@ async function handleApi(req: Request, env: Env, ctx: ExecutionContext, u: URL, 
     const body = (await req.json().catch(() => ({}))) as any;
     const pr = approveAndPublish(env, job, Array.isArray(body.platforms) ? body.platforms.filter((q: string) => PLATFORMS.includes(q)) : undefined);
     ctx.waitUntil(pr.catch(async e => { await notifyAdmin(env, `⚠️ Publishing "${job.title}" failed: ${String(e.message).slice(0, 300)}`, {}, "error"); }));
-    await Promise.race([pr.catch(() => {}), new Promise(r => setTimeout(r, 25000))]);
+    await pr.catch(() => {}); // wait for the real result: the dashboard request stays open, so the work is not cut off after the reply
     return jr({ ok: true });
   }
   if ((x = p.match(/^job\/(\w+)\/publish\/(telegram|youtube|facebook|instagram)$/)) && m === "POST") {
@@ -448,7 +448,7 @@ async function handleApi(req: Request, env: Env, ctx: ExecutionContext, u: URL, 
     const body = (await req.json().catch(() => ({}))) as any;
     const pr = approveAndPublish(env, job, Array.isArray(body.platforms) ? body.platforms.filter((q: string) => PLATFORMS.includes(q)) : undefined);
     ctx.waitUntil(pr.catch(async e => { await notifyAdmin(env, `⚠️ Publishing "${job.title}" failed: ${String(e.message).slice(0, 300)}`, {}, "error"); }));
-    await Promise.race([pr.catch(() => {}), new Promise(r => setTimeout(r, 25000))]);
+    await pr.catch(() => {}); // wait for the real result: the dashboard request stays open, so the work is not cut off after the reply
     return jr({ ok: true, id: job.id });
   }
   if (p === "config" && m === "GET") {
